@@ -90,10 +90,31 @@ sub read_script {
 	elsif($line =~ /\A\s*alter\s+table\s+(`.+`)\s*\z/i) {
 	    # mysqldump такого не генерирует, но в моих данных это будет
 	    my $table_qname = $1;
-	    die eval dw qw($table_qname) unless (my $table = $db->{tables}{$table_qname})
+	    my $xn = qr/\`[^,\\\`]+\`/;
+	    my $xnp = qr/(\`[^,\\\`]+\`)/;
+	    my $xk = qr/\(($xn(?:\s*,\s*$xn)*)\)/;
+	    die eval dw qw($table_qname $line) unless (my $table = $db->{tables}{$table_qname})
 		&& defined($line = <$in>)
-		&& $line =~ /\A\s*add\s+foreign\s+key\s*.*;\s*\z/i;
-	    # +++
+		&& $line =~ /\A\s*add\s+foreign\s+key\s+$xk\s+references\s+$xnp\s+$xk/gci;
+	    my($list,$ref_table,$ref_list) = ($1,$2,$3,$4);
+	    my($on_delete,$on_update);
+	    while($line =~ /\G\s+ON\s+(DELETE|UPDATE)\s+(CASCADE|NO\s+ACTION|SET\s+NULL|RESTRICT)/gci) {
+		my($k,$a) = ($1,$2);
+		if('DELETE' eq uc $k) { $on_delete = $a; }
+		elsif('UPDATE' eq uc $k) { $on_update = $a; }
+		else { die; }
+	    }
+	    die eval dw qw($table_qname $line) unless $line =~ /\G\s*;\s*\z/gci;
+	    my @list = &split_key_fields($list);
+	    my @ref_list = &split_key_fields($ref_list);
+	    die if @list != 1; #+++
+	    die if @list != @ref_list;
+	    die eval dw qw(\@list $table) unless $table->{fields}{$list[0]};
+	    die eval dw qw($table_qname \@list $table->{fields}{$list[0]}) if $table->{fields}{$list[0]}{ref};
+	    if(my $high = hv $low_table_names, $ref_table) { $ref_table = $high; }
+	    $table->{fields}{$list[0]}{ref} = { qtable => $ref_table, id => $ref_list[0],
+		(defined($on_delete) ? (on_delete => lc($on_delete)) : ()),
+		(defined($on_update) ? (on_update => lc($on_update)) : ()) };
 	}
 	elsif($line =~ /\A\s*delimiter\s+;;+\s*\z/i) {
 	    my $sql;
@@ -142,22 +163,21 @@ read_mysql_struct_line:
     elsif($ct =~ /\G\s*(?:CONSTRAINT\s+($xn)\s+)?FOREIGN\s+KEY\s+$xk\s+REFERENCES\s+$xnp\s+$xk/gci) {
 	my($name,$list,$ref_table,$ref_list) = ($1,$2,$3,$4);
 	my($on_delete,$on_update);
-	while($ct =~ /\G(?:\s+ON\s+(DELETE|UPDATE)\s+(CASCADE|NO\s+ACTION|SET\s+NULL|RESTRICT)){0,2}((,?)\n)/gci) {
+	while($ct =~ /\G(?:\s+ON\s+(DELETE|UPDATE)\s+(CASCADE|NO\s+ACTION|SET\s+NULL|RESTRICT))?((,?)\n)?/gci) {
 	    my($k,$a,$x,$c) = ($1,$2,$3,$4);
 	    unless($k) { die eval dw qw($k $a $x $c), 'pos($ct)', 'length($ct)', 'substr($ct, pos($ct), 20)', '$ct' unless $x; }
 	    # elsif(!defined $a) { die eval dw qw($k $a $x $c), 'pos($ct)', 'length($ct)', 'substr($ct, pos($ct), 20)', '$ct'; }
 	    elsif('DELETE' eq uc $k) { $on_delete = $a; }
 	    elsif('UPDATE' eq uc $k) { $on_update = $a; }
 	    else { die; }
-	    if($x ne '') { $comma = $c; last; }
+	    if(defined $x) { $comma = $c; last; }
 	}
 	my @list = &split_key_fields($list);
 	my @ref_list = &split_key_fields($ref_list);
 	die if @list != 1; #+++
 	die if @list != @ref_list;
 	die eval dw qw(\@list $table) unless $table->{fields}{$list[0]};
-	# die eval dw qw($list[0] $table->{fields}{$list[0]}{ref} $table $ct) if $table->{fields}{$list[0]}{ref};
-	die eval dw qw($table_name \@list $table->{fields}{$list[0]}) if $table->{fields}{$list[0]}{ref};
+	die eval dw qw($table->{name} \@list $table->{fields}{$list[0]}) if $table->{fields}{$list[0]}{ref};
 	if(my $high = hv $low_table_names, $ref_table) { $ref_table = $high; }
 	$table->{fields}{$list[0]}{ref} = { qtable => $ref_table, id => $ref_list[0], constraint => $name,
 	    (defined($on_delete) ? (on_delete => lc($on_delete)) : ()),
