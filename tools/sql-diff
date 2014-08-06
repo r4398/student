@@ -55,11 +55,31 @@ else { die '+++ ', eval dw qw($old); }
 
 sub read_script {
     my $script = shift;
+    my $db;
     xopen my($in), '<', $script;
     while(defined(my $line = <$in>)) {
 	if($line =~ /\A\s*--/) {}
+	elsif($line =~ /\A\s*create\s+database\s+.*;\s*\z/i) {}
+	elsif($line =~ /\A\s*use\s+.*;\s*\z/i) {}
+	elsif($line =~ /\A\s*drop\s+table\s+.*;\s*\z/i) {}
+	elsif($line =~ /\A\s*create\s+table\s+(`.*`)\s*\(\s*\z/i) {
+	    my $table_qname = $1;
+	    die eval dw qw($table_qname $db->{$table_qname}) if $db->{$table_qname};
+	    my $sql = $line;
+	    while(1) {
+		die eval dw qw($sql) unless defined($line = <$in>);
+		$sql .= $line;
+		last if $line =~ /\A\s*\).*;\s*\z/;
+	    }
+	    $db->{$table_qname} = &read_mysql_struct($sql);
+	}
 	elsif($line =~ /\A\s*\/\*!.*\*\/\s*;\s*\z/) {}
 	else { die eval dw qw($line); }
     }
     xclose $in;
+    return $db;
+}
+
+sub read_mysql_struct {
+    my $ct = shift;
 }
