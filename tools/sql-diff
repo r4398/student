@@ -1,0 +1,48 @@
+#!/usr/bin/perl -w
+# Автор: Юрий Решетников <reshu@mail.ru>
+use strict;
+use warnings;
+use utf8;
+use Reshu::Utils;
+
+my($new_script,$old);
+while(@ARGV) {
+    my $key = shift @ARGV;
+    if($key eq '--new' || $key eq '-n') {
+	die eval dw qw($new_script $old $key \@ARGV) unless @ARGV && !defined $new_script;
+	$new_script = shift @ARGV;
+    }
+    elsif($key eq '--old' || $key eq '-o') {
+	die eval dw qw($new_script $old $key \@ARGV) unless @ARGV && !defined $old;
+	$old->{script} = shift @ARGV;
+    }
+    elsif($key eq '--db') {
+	die eval dw qw($new_script $old $key \@ARGV) unless @ARGV && !exists($old->{script}) && !exists($old->{db});
+	$old->{db} = shift @ARGV;
+    }
+    elsif($key eq '--defaults-file') {
+	die eval dw qw($new_script $old $key \@ARGV) unless @ARGV && !exists($old->{script}) && !exists($old->{defaults_file});
+	$old->{defaults_file} = shift @ARGV;
+    }
+    elsif($key eq '--host' || $key eq '-h') {
+	die eval dw qw($new_script $old $key \@ARGV) unless @ARGV && !exists($old->{script}) && !exists($old->{host});
+	$old->{host} = shift @ARGV;
+    }
+    elsif($key eq '--user' || $key eq '-u') {
+	die eval dw qw($new_script $old $key \@ARGV) unless @ARGV && !exists($old->{script}) && !exists($old->{user});
+	$old->{user} = shift @ARGV;
+    }
+    elsif($key eq '--password' || $key eq '-p') {
+	die eval dw qw($new_script $old $key \@ARGV)
+	    unless !exists($old->{script}) && !exists($old->{password}) && !exists($old->{read_password});
+	$old->{read_password} = 1;
+    }
+    elsif($key =~ s/\A-p// || $key =~ s/\A--password=//) {
+	die eval dw qw($new_script $old $key \@ARGV)
+	    unless !exists($old->{script}) && !exists($old->{password}) && !exists($old->{read_password});
+	$old->{password} = $key;
+    }
+    else { die eval dw qw($new_script $old $key \@ARGV); }
+}
+die eval dw qw($new_script $old) unless $new_script && $old && ($old->{script} || $old->{db});
+
