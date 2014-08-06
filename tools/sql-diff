@@ -411,6 +411,7 @@ sub alter_keys {
 
 sub quoted_key_fields {
     my $fields = shift;
+    dieN 5, eval dw qw($fields) unless $fields && 'ARRAY' eq ref $fields;
     return '(', join(', ', @$fields), ')';
 }
 
@@ -461,11 +462,11 @@ sub print_create_table {
     }
     if($table->{unique_keys}) { foreach my $unique (@{$table->{unique_keys}}) {
 	if($first_field) { undef $first_field; } else { print ",\n"; }
-	print "\tunique key ", &quoted_key_fields($unique);
+	print "\tunique key ", &quoted_key_fields($unique->{fields});
     } }
     if($table->{keys}) { foreach my $key (@{$table->{keys}}) {
 	if($first_field) { undef $first_field; } else { print ",\n"; }
-	print "\tkey ", &quoted_key_fields($key);
+	print "\tkey ", &quoted_key_fields($key->{fields});
     } }
     print "\n" unless $first_field;
     print ") engine=InnoDB";
