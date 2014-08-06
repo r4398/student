@@ -241,7 +241,7 @@ sub sql_alter_tables {
 		my $add_field = sub {
 		    my $field = shift;
 		    $print_field->('  add ', &get_field_sql($field), !@_ ? () : !$_[0] ? ' first' : (' after ', shift->{qname}));
-		    $print_field->('  add ', &get_ref_sql($ctx, $field)) if $field->{ref};
+		    $print_field->('  add ', &get_ref_sql($new_struct, $field)) if $field->{ref};
 		};
 		my @f1 = sort { $a->{qname} cmp $b->{qname} } @{$told->{field_sequence}};
 		my @f2 = sort { $a->{qname} cmp $b->{qname} } @{$table->{field_sequence}};
@@ -269,7 +269,7 @@ sub sql_alter_tables {
 		    else {
 			$print_field->('  drop foreign key ', $f1[0]->{ref}{constraint}) if $f1[0]->{ref} && $f2[0]->{differ_ref};
 			$print_field->('  modify ', &get_field_sql($f2[0])) if $f2[0]->{differ};
-			$print_field->('  add ', &get_ref_sql($ctx, $f2[0]))
+			$print_field->('  add ', &get_ref_sql($new_struct, $f2[0]))
 			    if $f2[0]->{ref} && $f2[0]->{differ_ref};
 			#+++ field sequence change
 			shift @f1; $prev_field = shift @f2;
@@ -335,25 +335,34 @@ sub get_field_sql {
 	($field->{auto_increment} ? ' auto_increment' : ());
 }
 
-sub get_ref_id {#+++
-    my $self = shift;
+sub get_ref_id {
+    my $db = shift;
     my $field = shift;
     die eval dw qw($field) unless $field->{ref};
     return $field->{ref}{id} if $field->{ref}{id};
-    &Carp::confess(eval dw qw($field)) unless my $ref_table = $self->{data}{tables}{$field->{ref}{table}};
+    &Carp::confess(eval dw qw($field)) unless my $ref_table = $db->{tables}{$field->{ref}{qtable}};
     die unless $ref_table->{primary_key};
     die eval dw qw($field) unless @{ $ref_table->{primary_key} } == 1;
-    return $ref_table->{primary_key}->[0];
+    return $ref_table->{primary_key}[0];
 }
 
-sub get_ref_sql {#+++
-    my $self = shift;
-    my $dbh = shift;
+sub get_ref_sql {
+    my $db = shift;
     my $field = shift;
-    return "foreign key (", $dbh->quote_identifier($field->{sql_name}), ') references ',
-	$dbh->quote_identifier($field->{ref}{sql_table}), #+++ $pp
-	' (', $dbh->quote_identifier($self->get_ref_id($field)), ')',
-	map($self->references_restrict($field, $_), 'on update', 'on delete');
+    return "foreign key (", $field->{qname}, ') references ', $field->{ref}{qtable}, ' (', &get_ref_id($db, $field), ')',
+	map(&references_restrict($field, $_), 'on update', 'on delete');
+}
+
+sub references_restrict {
+    my $field = shift;
+    my $cond = shift;
+    my $key = $cond; $key =~ s/ /_/g;
+    if(my $r = hv $field, 'ref', $key) {
+	if(lc($r) eq 'cascade') { return ' '.$cond.' cascade'; }
+	elsif($r =~ /\Aset\s+null\z/i) { return ' '.$cond.' set null'; }
+	elsif($r =~ /\Ano\s+action\z/i) { return ' '.$cond.' no action'; }
+    }
+    return ' '.$cond.' restrict';
 }
 
 sub alter_keys {
