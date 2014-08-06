@@ -69,7 +69,8 @@ else { die '+++ ', eval dw qw($old); }
 sub read_script {
     my $script = shift;
     my $db;
-    xopen my($in), '<', $script;
+    my $in;
+    if($script eq '-') { $in = \*STDIN; } else { xopen $in, '<', $script; }
     while(defined(my $line = <$in>)) {
 	if($line =~ /\A\s*--/) {}
 	elsif($line =~ /\A\s*\z/) {}
@@ -487,15 +488,17 @@ sub print_create_table {
 
 sub read_mysql_trigger {
     my $ct = shift;
+    my $trigger = {};
     if($ct =~ /\A\s*\s*(?:--\s*)?drop\s+trigger\s+`.+?`\s*;+\s+create\s+trigger\s+(`.+?`)\s+(before|after)\s+(insert|update|delete)\s+on\s+(`.+?`)\s+(for\s+each\s+row)\s+(begin\s.*\bend)(?:\s*;)?\s*;+\s*\z/si) {
-	my $trigger = {};
 	@{$trigger}{qw(qname time action qtable each body)} = ($1,$2,$3,$4,$5,$6);
-	# warn eval dw qw($trigger $ct);
-	return $trigger
+    }
+    elsif($ct =~ /\A\s*\/\*!\d+\s+create\*\/(?:\s+\/\*.*?\*\/)?\s+\/\*!\d+\s+trigger\s+(`.+?`)\s+(before|after)\s+(insert|update|delete)\s+on\s+(`.+?`)\s+(for\s+each\s+row)\s+(begin\s.*\bend)\s*\*\/\s*;+\s*\z/si) {
+	@{$trigger}{qw(qname time action qtable each body)} = ($1,$2,$3,$4,$5,$6);
     }
     else {
 	die eval dw qw($ct);
     }
+    return $trigger
 }
 
 sub sql_alter_triggers {
