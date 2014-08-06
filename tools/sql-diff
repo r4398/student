@@ -145,6 +145,7 @@ read_mysql_struct_line:
 	while($ct =~ /\G(?:\s+ON\s+(DELETE|UPDATE)\s+(CASCADE|NO\s+ACTION|SET\s+NULL|RESTRICT)){0,2}((,?)\n)/gci) {
 	    my($k,$a,$x,$c) = ($1,$2,$3,$4);
 	    unless($k) { die eval dw qw($k $a $x $c), 'pos($ct)', 'length($ct)', 'substr($ct, pos($ct), 20)', '$ct' unless $x; }
+	    # elsif(!defined $a) { die eval dw qw($k $a $x $c), 'pos($ct)', 'length($ct)', 'substr($ct, pos($ct), 20)', '$ct'; }
 	    elsif('DELETE' eq uc $k) { $on_delete = $a; }
 	    elsif('UPDATE' eq uc $k) { $on_update = $a; }
 	    else { die; }
@@ -239,7 +240,7 @@ sub sql_alter_tables {
 		};
 		my $add_field = sub {
 		    my $field = shift;
-		    $print_field->('  add ', &get_field_sql($ctx, $field), !@_ ? () : !$_[0] ? ' first' : (' after ', shift->{qname}));
+		    $print_field->('  add ', &get_field_sql($field), !@_ ? () : !$_[0] ? ' first' : (' after ', shift->{qname}));
 		    $print_field->('  add ', &get_ref_sql($ctx, $field)) if $field->{ref};
 		};
 		my @f1 = sort { $a->{qname} cmp $b->{qname} } @{$told->{field_sequence}};
@@ -267,7 +268,7 @@ sub sql_alter_tables {
 		    elsif($f2[0]->{new}) { my $f2 = shift @f2; $add_field->($f2, $prev_field); $prev_field = $f2; }
 		    else {
 			$print_field->('  drop foreign key ', $f1[0]->{ref}{constraint}) if $f1[0]->{ref} && $f2[0]->{differ_ref};
-			$print_field->('  modify ', &get_field_sql($ctx, $f2[0])) if $f2[0]->{differ};
+			$print_field->('  modify ', &get_field_sql($f2[0])) if $f2[0]->{differ};
 			$print_field->('  add ', &get_ref_sql($ctx, $f2[0]))
 			    if $f2[0]->{ref} && $f2[0]->{differ_ref};
 			#+++ field sequence change
@@ -300,6 +301,14 @@ sub sql_alter_tables {
 }
 
 sub get_field_text {
+#     my($db,@args) = @_;
+#     my @r = &get_field_text_($db,@args);
+#     foreach(@r) {
+# 	die eval dw qw (\@r \@args) unless $_;
+#     }
+#     return @r;
+# }
+# sub get_field_text_ {
     my $db = shift;
     my $field = shift;
     my $part = shift; # data | ref
@@ -312,16 +321,14 @@ sub get_field_text {
 	((!$part || $part eq 'ref') && $field->{ref} ? (
 	     ' references ', $field->{ref}{qtable}, ' (', &get_ref_id($db, $field), ')',
 	     ($field->{ref}{on_delete} ? (' on delete ', $field->{ref}{on_delete}) : ()),
-	     ($field->{ref}{on_update} ? (' on update ', $field->{ref}{on_delete}) : ()),
+	     ($field->{ref}{on_update} ? (' on update ', $field->{ref}{on_update}) : ()),
 	 ) : ()),
 	($gen_after ? (defined($field->{prev_field_name}) ? (' after ', $field->{prev_field_name}) : (' first')) : ());
 }
 
-sub get_field_sql {#+++
-    my $self = shift;
-    my $dbh = shift;
+sub get_field_sql {
     my $field = shift;
-    return $dbh->quote_identifier($field->{sql_name}), ' ', $field->{sql_type},
+    return $field->{qname}, ' ', $field->{sql_type},
 	($field->{not_null} ? ' not' : ''), ' null',
 	(defined $field->{default} ? (' default ', $field->{default}) : ()),
 	(defined $field->{on_update} ? (' on update ', $field->{on_update}) : ()),
