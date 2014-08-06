@@ -49,6 +49,15 @@ die eval dw qw($new_script $old) unless $new_script && $old && ($old->{script} |
 
 # warn eval dw qw($new_script $old);
 
+my $low_table_names;
+my %type_map = (
+    'int(11)' => 'integer',
+    'bigint(20)' => 'bigint',
+    'int(10) unsigned' => 'integer unsigned',
+    'bigint(20) unsigned' => 'bigint unsigned',
+    # 'tinyint(4)' => 'tinyint',
+);
+
 my $new_struct = &read_script($new_script);
 my $old_struct;
 if($old->{script}) { $old_struct = &read_script($old->{script}); }
@@ -101,15 +110,6 @@ sub read_script {
     xclose $in;
     return $db;
 }
-
-my $low_table_names;
-my %type_map = (
-    'int(11)' => 'integer',
-    'bigint(20)' => 'bigint',
-    'int(10) unsigned' => 'integer unsigned',
-    'bigint(20) unsigned' => 'bigint unsigned',
-    # 'tinyint(4)' => 'tinyint',
-);
 
 sub read_mysql_struct {
     my $ct = shift;
@@ -209,7 +209,7 @@ sub sql_alter_tables {
 	elsif($old[0] gt $new[0]) { $create->(shift @new); }
 	else {
 	    my $told = $old_struct->{tables}{shift @old};
-	    my $table = $new_struct->{tables}{my $tn = shift @new};
+	    my $table = $new_struct->{tables}{shift @new};
 	    if($check_print->($table)) {
 		my($header_printed,@comments);
 		my $print_field = sub {
