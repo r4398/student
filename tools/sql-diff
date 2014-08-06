@@ -100,15 +100,8 @@ sub read_script {
 
 sub read_mysql_struct {
     my $ct = shift;
-}
-
-sub read_mysql_trigger {
-    my $ct = shift;
     my $table = {};
-    my $qtn = $dbh->quote_identifier($table_name);
-    my $ct = $self->{attrs}{structure} ? $self->{attrs}{structure}{tables}{$table_name} : ($dbh->selectrow_array("show create table $qtn"))[1];
-#     warn eval &dw(qw($ct));
-    die eval dw qw($table_name $ct) unless $ct =~ /\ACREATE TABLE \Q$qtn\E \(\n/gc;
+    die eval dw qw($table_name $ct) unless $ct =~ /\ACREATE TABLE `.*` \(\n/gci;
     my $xn = qr/\`[^,\\\`]+\`/;
     my $xnp = qr/\`([^,\\\`]+)\`/;
     my $xk = qr/\(($xn(?:\s*,\s*$xn)*)\)/;
@@ -151,4 +144,8 @@ read_mysql_struct_line:
     die unless $ct =~ /\G\) ENGINE=\w+(?: AUTO_INCREMENT=\d+)? DEFAULT CHARSET=\w+(?: COMMENT='.*')?\z/gc;
     #+++ Обработать Engine и Charset
     return $table;
+}
+
+sub read_mysql_trigger {
+    my $ct = shift;
 }
