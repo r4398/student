@@ -59,6 +59,7 @@ sub read_script {
     xopen my($in), '<', $script;
     while(defined(my $line = <$in>)) {
 	if($line =~ /\A\s*--/) {}
+	elsif($line =~ /\A\s*\z/) {}
 	elsif($line =~ /\A\s*create\s+database\s+.*;\s*\z/i) {}
 	elsif($line =~ /\A\s*use\s+.*;\s*\z/i) {}
 	elsif($line =~ /\A\s*drop\s+table\s+.*;\s*\z/i) {}
@@ -73,6 +74,23 @@ sub read_script {
 	    }
 	    $db->{$table_qname} = &read_mysql_struct($sql);
 	}
+	elsif($line =~ /\A\s*alter\s+table\s+(`.*`)\s*\z/i) {
+	    # mysqldump такого не генерирует, но в моих данных это будет
+	    my $table_qname = $1;
+	    die eval dw qw($table_qname) unless (my $table = $db->{$table_qname})
+		&& defined($line = <$in>)
+		&& $line =~ /\A\s*add\s+foreign\s+key\s*.*;\s*\z/i;
+	    # +++
+	}
+	elsif($line =~ /\A\s*delimiter\s+;;+\s*\z/i) {
+	    my $sql;
+	    while(1) {
+		die eval dw qw($sql) unless defined($line = <$in>);
+		last if $line =~ /\A\s*delimiter\s+;\s*\z/i;
+		$sql .= $line;
+	    }
+	    &read_mysql_trigger($sql);
+	}
 	elsif($line =~ /\A\s*\/\*!.*\*\/\s*;\s*\z/) {}
 	else { die eval dw qw($line); }
     }
@@ -81,5 +99,9 @@ sub read_script {
 }
 
 sub read_mysql_struct {
+    my $ct = shift;
+}
+
+sub read_mysql_trigger {
     my $ct = shift;
 }
