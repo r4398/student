@@ -117,7 +117,7 @@ sub read_mysql_struct {
     die eval dw qw($table_name $ct) unless $ct =~ /\ACREATE TABLE (`.+`) \(\n/gci;
     $table->{qname} = $1;
     my $xn = qr/\`[^,\\\`]+\`/;
-    my $xnp = qr/\`([^,\\\`]+)\`/;
+    my $xnp = qr/(\`[^,\\\`]+\`)/;
     my $xk = qr/\(($xn(?:\s*,\s*$xn)*)\)/;
     my $prev_field_name;
 read_mysql_struct_line:
@@ -158,7 +158,7 @@ read_mysql_struct_line:
 	# die eval dw qw($list[0] $table->{fields}{$list[0]}{ref} $table $ct) if $table->{fields}{$list[0]}{ref};
 	die eval dw qw($table_name \@list $table->{fields}{$list[0]}) if $table->{fields}{$list[0]}{ref};
 	if(my $high = hv $low_table_names, $ref_table) { $ref_table = $high; }
-	$table->{fields}{$list[0]}{ref} = { sql_table => $ref_table, id => $ref_list[0], constraint => $name,
+	$table->{fields}{$list[0]}{ref} = { qtable => $ref_table, id => $ref_list[0], constraint => $name,
 	    (defined($on_delete) ? (on_delete => lc($on_delete)) : ()),
 	    (defined($on_update) ? (on_update => lc($on_update)) : ()) };
     }
@@ -347,6 +347,53 @@ sub get_ref_sql {#+++
 	$dbh->quote_identifier($field->{ref}{sql_table}), #+++ $pp
 	' (', $dbh->quote_identifier($self->get_ref_id($field)), ')',
 	map($self->references_restrict($field, $_), 'on update', 'on delete');
+}
+
+sub alter_keys {
+    my $told = shift;
+    my $table = shift;
+    my $print_field = shift;
+    my $drop_comment = shift;
+    my $kk = shift;
+    my $kn = shift;
+    my $foreign = shift;
+    my @l1 = sort { $a->{key} cmp $b->{key} } map { qname => $_->{qname}, key => join(',', @{$_->{fields}}) },
+	@{$told->{$kk} || []};
+    my @l2 = sort { $a->{key} cmp $b->{key} } map { qname => $_->{qname}, key => join(',', @{$_->{fields}}) },
+	@{$table->{$kk} || []};
+    while(@l1 && @l2) {
+	if($l1[0]->{key} lt $l2[0]->{key}) { my $k = shift @l1; $print_field->($drop_comment, '  drop key ', $k->{qname}); }
+	elsif($l1[0]->{key} gt $l2[0]->{key}) { my $k = shift @l2; $print_field->('  add ', $kn, ' ', &quoted_key_fields($k->{fields})) unless $k->{auto}; }
+	else { shift @l1; my $k = shift @l2; shift @l2 if @l2 && $l2[0]->{key} eq $k->{key} && ($k->{auto} || $l2[0]->{auto}); }
+    }
+    while(@l1) { my $k = shift @l1; $print_field->($drop_comment, '  drop key ', $k->{qname}); }
+    while(@l2) { my $k = shift @l2; $print_field->('  add ', $kn, ' ', &quoted_key_fields($k->{fields})) unless $k->{auto}; }
+}
+
+sub quoted_key_fields {
+    my $fields = shift;
+    return '(', join(', ', @$fields), ')';
+}
+
+sub print_deferred_keys {
+    my $ctx = shift;
+    my $table = shift;
+    if(my $deferred = delete $ctx->{deferred_keys}{$table->{qname}}) {
+	my $prev;
+	foreach my $sql (@$deferred) {
+	    my $t = shift @$sql;
+	    if(defined($prev) && $prev eq $t) {
+		print ",\n";
+	    }
+	    else {
+		if(defined $prev) { print ";\n\n"; }
+		print 'alter table ', $t, "\n";
+		$prev = $t;
+	    }
+	    print "\tadd ", @$sql;
+	}
+	if(defined $prev) { print ";\n\n"; }
+    }
 }
 
 sub read_mysql_trigger {
