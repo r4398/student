@@ -46,3 +46,20 @@ while(@ARGV) {
 }
 die eval dw qw($new_script $old) unless $new_script && $old && ($old->{script} || $old->{db});
 
+# warn eval dw qw($new_script $old);
+
+my $new_struct = &read_script($new_script);
+my $old_struct;
+if($old->{script}) { $old_struct = &read_script($old->{script}); }
+else { die '+++ ', eval dw qw($old); }
+
+sub read_script {
+    my $script = shift;
+    xopen my($in), '<', $script;
+    while(defined(my $line = <$in>)) {
+	if($line =~ /\A\s*--/) {}
+	elsif($line =~ /\A\s*\/\*!.*\*\/\s*;\s*\z/) {}
+	else { die eval dw qw($line); }
+    }
+    xclose $in;
+}
