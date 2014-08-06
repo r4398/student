@@ -5,7 +5,7 @@ use warnings;
 use utf8;
 use Reshu::Utils;
 
-my($new_script,$old);
+my($new_script,$old,%attrs);
 while(@ARGV) {
     my $key = shift @ARGV;
     if($key eq '--new' || $key eq '-n') {
@@ -42,6 +42,7 @@ while(@ARGV) {
 	    unless !exists($old->{script}) && !exists($old->{password}) && !exists($old->{read_password});
 	$old->{password} = $key;
     }
+    elsif($key eq '--uncomment-drops' || $key eq '--uncomment_drops') { ++$attrs{uncomment_drops}; }
     else { die eval dw qw($new_script $old $key \@ARGV); }
 }
 die eval dw qw($new_script $old) unless $new_script && $old && ($old->{script} || $old->{db});
@@ -53,6 +54,9 @@ my $old_struct;
 if($old->{script}) { $old_struct = &read_script($old->{script}); }
 else { die '+++ ', eval dw qw($old); }
 
+&sql_alter_tables($old_struct, $new_struct);
+&sql_alter_triggers($old_struct, $new_struct);
+
 sub read_script {
     my $script = shift;
     my $db;
@@ -63,21 +67,21 @@ sub read_script {
 	elsif($line =~ /\A\s*create\s+database\s+.*;\s*\z/i) {}
 	elsif($line =~ /\A\s*use\s+.*;\s*\z/i) {}
 	elsif($line =~ /\A\s*drop\s+table\s+.*;\s*\z/i) {}
-	elsif($line =~ /\A\s*create\s+table\s+(`.*`)\s*\(\s*\z/i) {
+	elsif($line =~ /\A\s*create\s+table\s+(`.+`)\s*\(\s*\z/i) {
 	    my $table_qname = $1;
-	    die eval dw qw($table_qname $db->{$table_qname}) if $db->{$table_qname};
+	    die eval dw qw($table_qname $db->{tables}{$table_qname}) if $db->{tables}{$table_qname};
 	    my $sql = $line;
 	    while(1) {
 		die eval dw qw($sql) unless defined($line = <$in>);
 		$sql .= $line;
 		last if $line =~ /\A\s*\).*;\s*\z/;
 	    }
-	    $db->{$table_qname} = &read_mysql_struct($sql);
+	    $db->{tables}{$table_qname} = &read_mysql_struct($sql);
 	}
-	elsif($line =~ /\A\s*alter\s+table\s+(`.*`)\s*\z/i) {
+	elsif($line =~ /\A\s*alter\s+table\s+(`.+`)\s*\z/i) {
 	    # mysqldump такого не генерирует, но в моих данных это будет
 	    my $table_qname = $1;
-	    die eval dw qw($table_qname) unless (my $table = $db->{$table_qname})
+	    die eval dw qw($table_qname) unless (my $table = $db->{tables}{$table_qname})
 		&& defined($line = <$in>)
 		&& $line =~ /\A\s*add\s+foreign\s+key\s*.*;\s*\z/i;
 	    # +++
@@ -109,22 +113,23 @@ my %type_map = (
 
 sub read_mysql_struct {
     my $ct = shift;
-    my $table = {};
-    die eval dw qw($table_name $ct) unless $ct =~ /\ACREATE TABLE `.*` \(\n/gci;
+    my $table;
+    die eval dw qw($table_name $ct) unless $ct =~ /\ACREATE TABLE (`.+`) \(\n/gci;
+    $table->{qname} = $1;
     my $xn = qr/\`[^,\\\`]+\`/;
     my $xnp = qr/\`([^,\\\`]+)\`/;
     my $xk = qr/\(($xn(?:\s*,\s*$xn)*)\)/;
     my $prev_field_name;
 read_mysql_struct_line:
     my $comma = 0;
-    if($ct =~ /\G\s*\`([^\\\`]+)\`\s+(\w+(?:\([^\)]+\))?(?:\s+unsigned)?)(?:(\s+NOT\s+NULL)|\s+NULL)?(\s+AUTO_INCREMENT)?(?:\s+DEFAULT (?:NULL|(CURRENT_TIMESTAMP|b?'.*?')))?(?:\s+ON\s+UPDATE\s+(CURRENT_TIMESTAMP|'.*?'))?(?:\s+COMMENT\s+'.*')?(,?)\n/gci) {
+    if($ct =~ /\G\s*(\`.+\`)\s+(\w+(?:\([^\)]+\))?(?:\s+unsigned)?)(?:(\s+NOT\s+NULL)|\s+NULL)?(\s+AUTO_INCREMENT)?(?:\s+DEFAULT (?:NULL|(CURRENT_TIMESTAMP|b?'.*?')))?(?:\s+ON\s+UPDATE\s+(CURRENT_TIMESTAMP|'.*?'))?(?:\s+COMMENT\s+'.*')?(,?)\n/gci) {
 	my $field = {};
-	(@{$field}{qw(sql_name sql_type not_null auto_increment default on_update)}, $comma) = ($1,$2,$3,$4,$5,$6,$7);
+	(@{$field}{qw(qname sql_type not_null auto_increment default on_update)}, $comma) = ($1,$2,$3,$4,$5,$6,$7);
 	if(my $t = $type_map{$field->{sql_type}}) { $field->{sql_type} = $t; }
 	push @{$table->{field_sequence}}, $field;
-	$table->{fields}{$field->{sql_name}} = $field;
+	$table->{fields}{$field->{qname}} = $field;
 	$field->{prev_field_name} = $prev_field_name;
-	$prev_field_name = $field->{sql_name};
+	$prev_field_name = $field->{qname};
     }
     elsif($ct =~ /\G\s*PRIMARY\s+KEY\s*\((\`[^,\\\`]+\`(?:\s*,\s*\`[^,\\\`]+\`)*)\)(,?)\n/gci) {
 	(my($list),$comma) = ($1,$2);
@@ -149,7 +154,7 @@ read_mysql_struct_line:
 	my @ref_list = &split_key_fields($ref_list);
 	die if @list != 1; #+++
 	die if @list != @ref_list;
-	die unless $table->{fields}{$list[0]};
+	die eval dw qw(\@list $table) unless $table->{fields}{$list[0]};
 	# die eval dw qw($list[0] $table->{fields}{$list[0]}{ref} $table $ct) if $table->{fields}{$list[0]}{ref};
 	die eval dw qw($table_name \@list $table->{fields}{$list[0]}) if $table->{fields}{$list[0]}{ref};
 	if(my $high = hv $low_table_names, $ref_table) { $ref_table = $high; }
@@ -165,8 +170,140 @@ read_mysql_struct_line:
     return $table;
 }
 
-sub split_key_fields { map substr($_, 1, length($_) - 2), split /\s*,\s*/, shift; }
+sub split_key_fields { split /\s*,\s*/, shift; }
+# Ранее в этой функции было еще и удаление кавычек. Теперь я бы отдельную функцию создавать бы уже не стал, но и удалять ее тоже нет желания.
+
+sub sql_alter_tables {
+    my $old_struct = shift;
+    my $new_struct = shift;
+    my $ctx = {};
+    my @old = sort keys %{$old_struct->{tables} || {}};
+    my @new = sort keys %{$new_struct->{tables} || {}};
+    my $need_table_nl;
+    my $check_print = sub {
+	# В старом коде эта функция позволяла выводить информацию выборочно по одной/нескольким таблицам
+	# В новом коде такого функционала пока не предусмотрено, но совсем этот код удалять не стал, может пригодиться.
+	my $table = shift;
+	if(1) { return $table; }
+	else { return; }
+    };
+    my $drop = sub {
+	my $table = shift;
+	if($check_print->({ qname => $table })) {
+	    print +($attrs{uncomment_drops} ? '' : '-- '), 'drop table ', $table, ";\n";
+	    $need_table_nl = 1;
+	}
+    };
+    my $create = sub {
+	my $table = shift;
+	$ctx->{printed_tables}{$table->{qname}} = 1;
+	if($check_print->($table)) {
+	    &print_create_table($ctx, $table);
+	    $need_table_nl = 0;
+	}
+	&print_deferred_keys($ctx, $table);
+    };
+    while(@old && @new) {
+	if($old[0] lt $new[0]) { $drop->(shift @old); }
+	elsif($old[0] gt $new[0]) { $create->(shift @new); }
+	else {
+	    my $told = $old_struct->{tables}{shift @old};
+	    my $table = $new_struct->{tables}{my $tn = shift @new};
+	    if($check_print->($table)) {
+		my($header_printed,@comments);
+		my $print_field = sub {
+		    if($_[0] eq '-- ') {
+			push @comments, ",\n" if @comments;
+			push @comments, @_;
+		    }
+		    else {
+			if($header_printed) {
+			    print ",\n";
+			}
+			else {
+			    $header_printed = 1;
+			    print "\n" if $need_table_nl;
+			    print 'alter table ', $table->{qname}, "\n";
+			}
+			if(@comments) {
+			    print @comments, ",\n";
+			    @comments = ();
+			}
+			print @_;
+		    }
+		};
+		my $drop_field = sub {
+		    my $field = shift;
+		    $print_field->(($attrs{uncomment_drops} ? '' : '-- '), '  drop foreign key ', $field->{ref}{constraint}) if $field->{ref};
+		    $print_field->(($attrs{uncomment_drops} ? '' : '-- '), '  drop ', $field->{qname});
+		};
+		my $add_field = sub {
+		    my $field = shift;
+		    $print_field->('  add ', &get_field_sql($ctx, $field), !@_ ? () : !$_[0] ? ' first' : (' after ', shift->{qname}));
+		    $print_field->('  add ', &get_ref_sql($ctx, $field)) if $field->{ref};
+		};
+		my @f1 = sort { $a->{qname} cmp $b->{qname} } @{$told->{field_sequence}};
+		my @f2 = sort { $a->{qname} cmp $b->{qname} } @{$table->{field_sequence}};
+		while(@f1 && @f2) {
+		    if($f1[0]->{qname} lt $f2[0]->{qname}) { shift(@f1)->{old} = 1; }
+		    elsif($f1[0]->{qname} gt $f2[0]->{qname}) { shift(@f2)->{new} = 1; }
+		    else {
+			my $f1 = shift @f1; my $f2 = shift @f2;
+			my $s1 = join '', &get_field_text($f1, 'data');
+			my $s2 = join '', &get_field_text($f2, 'data');
+			if($s1 ne $s2) { $f2->{differ} = 1; }
+			my $s1r = join '', &get_field_text($f1, 'ref');
+			my $s2r = join '', &get_field_text($f2, 'ref');
+			if($s1r ne $s2r) { $f2->{differ_ref} = 1; }
+		    }
+		}
+		while(@f1) { shift(@f1)->{old} = 1; }
+		while(@f2) { shift(@f2)->{new} = 1; }
+		@f1 = @{$told->{field_sequence}};
+		@f2 = @{$table->{field_sequence}};
+		my $prev_field;
+		while(@f1 && @f2) {
+		    if($f1[0]->{old}) { $drop_field->(shift @f1); }
+		    elsif($f2[0]->{new}) { my $f2 = shift @f2; $add_field->($f2, $prev_field); $prev_field = $f2; }
+		    else {
+			$print_field->('  drop foreign key ', $f1[0]->{ref}{constraint}) if $f1[0]->{ref} && $f2[0]->{differ_ref};
+			$print_field->('  modify ', &get_field_sql($ctx, $f2[0])) if $f2[0]->{differ};
+			$print_field->('  add ', &get_ref_sql($ctx, $f2[0]))
+			    if $f2[0]->{ref} && $f2[0]->{differ_ref};
+			#+++ field sequence change
+			shift @f1; $prev_field = shift @f2;
+		    }
+		}
+		while(@f1) { $drop_field->(shift @f1); }
+		while(@f2) { $add_field->(shift @f2); }
+		&alter_keys($told, $table, $print_field, ($attrs{uncomment_drops} ? '' : '-- '), 'unique_keys', 'unique');
+		&alter_keys($told, $table, $print_field, ($attrs{uncomment_drops} ? '' : '-- '), 'keys', 'key', 'foreign');
+		#+++
+		if($header_printed) {
+		    print "\n", @comments if @comments;
+		    print "\n;\n\n";
+		    $need_table_nl = 0;
+		}
+		elsif(@comments) {
+		    print "\n" if $need_table_nl;
+		    print '-- alter table ', $table->{qname}, "\n", @comments;
+		    print "\n-- ;\n\n";
+		    $need_table_nl = 0;
+		}
+	    }
+	    $ctx->{printed_tables}{$table->{qname}} = 1;
+	    &print_deferred_keys($ctx, $table);
+	}
+    }
+    while(@old) { $drop->(shift @old); }
+    while(@new) { $create->(shift @new); }
+}
 
 sub read_mysql_trigger {
     my $ct = shift;
+}
+
+sub sql_alter_triggers {
+    my $old_struct = shift;
+    my $new_struct = shift;
 }
