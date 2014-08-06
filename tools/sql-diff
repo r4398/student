@@ -221,7 +221,7 @@ sub sql_alter_tables {
 	my $table = shift;
 	$ctx->{printed_tables}{$table->{qname}} = 1;
 	if($check_print->($table)) {
-	    &print_create_table($ctx, $old_struct, $table);
+	    &print_create_table($ctx, $table);
 	    $need_table_nl = 0;
 	}
 	&print_deferred_keys($ctx, $table);
@@ -264,7 +264,7 @@ sub sql_alter_tables {
 		    my $field = shift;
 		    $print_field->('  add ', &get_field_sql($field), !@_ ? () : !$_[0] ? ' first' : (' after ', shift->{qname}));
 		    if($field->{ref}) {
-			&add_foreign_deferred($ctx, $old_struct, $table, $field, sub { $print_field->('  add ', @_); });
+			&add_foreign_deferred($ctx, $table, $field, sub { $print_field->('  add ', @_); });
 		    }
 		};
 		my @f1 = sort { $a->{qname} cmp $b->{qname} } @{$told->{field_sequence}};
@@ -294,7 +294,7 @@ sub sql_alter_tables {
 			$print_field->('  drop foreign key ', $f1[0]->{ref}{constraint}) if $f1[0]->{ref} && $f2[0]->{differ_ref};
 			$print_field->('  modify ', &get_field_sql($f2[0])) if $f2[0]->{differ};
 			if($f2[0]->{ref} && $f2[0]->{differ_ref}) {
-			    &add_foreign_deferred($ctx, $old_struct, $table, $f2[0], sub { $print_field->('  add ', @_); });
+			    &add_foreign_deferred($ctx, $table, $f2[0], sub { $print_field->('  add ', @_); });
 			}
 			#+++ field sequence change
 			shift @f1; $prev_field = shift @f2;
@@ -441,12 +441,11 @@ sub print_deferred_keys {
 
 sub add_foreign_deferred {
     my $ctx = shift;
-    my $old_struct = shift;
     my $table = shift;
     my $field = shift;
     my $add = shift;
     my @sql = &get_ref_sql($table, $field);
-    if($ctx->{printed_tables}{$field->{ref}{qtable}} || $old_struct->{tables}{$field->{ref}{qtable}}) {
+    if($ctx->{printed_tables}{$field->{ref}{qtable}}) {
 	$add->(@sql);
     }
     else {
@@ -457,7 +456,6 @@ sub add_foreign_deferred {
 
 sub print_create_table {
     my $ctx = shift;
-    my $old_struct = shift;
     my $table = shift;
     print 'create table ', $table->{qname}, " (\n";
     my $first_field = 1;
@@ -465,7 +463,7 @@ sub print_create_table {
 	if($first_field) { undef $first_field; } else { print ",\n"; }
 	print "\t", &get_field_sql($field);
 	if($field->{ref}) {
-	    &add_foreign_deferred($ctx, $old_struct, $table, $field, sub { print ",\n\t", @_; });
+	    &add_foreign_deferred($ctx, $table, $field, sub { print ",\n\t", @_; });
 	}
     } }
     if($table->{primary_key}) {
