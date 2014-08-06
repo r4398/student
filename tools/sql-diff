@@ -100,7 +100,8 @@ sub read_script {
 	    my($on_delete,$on_update);
 	    while($line =~ /\G\s+ON\s+(DELETE|UPDATE)\s+(CASCADE|NO\s+ACTION|SET\s+NULL|RESTRICT)/gci) {
 		my($k,$a) = ($1,$2);
-		if('DELETE' eq uc $k) { $on_delete = $a; }
+		if('RESTRICT' eq uc $a) {}
+		elsif('DELETE' eq uc $k) { $on_delete = $a; }
 		elsif('UPDATE' eq uc $k) { $on_update = $a; }
 		else { die; }
 	    }
@@ -167,6 +168,7 @@ read_mysql_struct_line:
 	    my($k,$a,$x,$c) = ($1,$2,$3,$4);
 	    unless($k) { die eval dw qw($k $a $x $c), 'pos($ct)', 'length($ct)', 'substr($ct, pos($ct), 20)', '$ct' unless $x; }
 	    # elsif(!defined $a) { die eval dw qw($k $a $x $c), 'pos($ct)', 'length($ct)', 'substr($ct, pos($ct), 20)', '$ct'; }
+	    elsif('RESTRICT' eq uc $a) {}
 	    elsif('DELETE' eq uc $k) { $on_delete = $a; }
 	    elsif('UPDATE' eq uc $k) { $on_update = $a; }
 	    else { die; }
