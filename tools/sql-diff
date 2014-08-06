@@ -47,13 +47,11 @@ while(@ARGV) {
 	$old->{password} = $key;
     }
     elsif($key eq '--uncomment-drops' || $key eq '--uncomment_drops') { ++$attrs{uncomment_drops}; }
+    elsif($key eq '--low-table-names' || $key eq '--low_table_names') { ++$attrs{low_table_names}; }
     else { die eval dw qw($new_script $old $key \@ARGV); }
 }
 die eval dw qw($new_script $old) unless $new_script && $old && ($old->{script} || $old->{db});
 
-# warn eval dw qw($new_script $old);
-
-my $low_table_names;
 my %type_map = (
     'int(11)' => 'integer',
     'bigint(20)' => 'bigint',
@@ -61,6 +59,8 @@ my %type_map = (
     'bigint(20) unsigned' => 'bigint unsigned',
     # 'tinyint(4)' => 'tinyint',
 );
+
+my $cmp_table = $attrs{low_table_names} ? sub { lc($_[0]) cmp lc($_[1]) } : sub { $_[0] cmp $_[1] };
 
 my $new_struct = &read_script($new_script);
 my $old_struct;
@@ -147,7 +147,6 @@ sub read_script {
 	    die if @list != @ref_list;
 	    die eval dw qw(\@list $table) unless $table->{fields}{$list[0]};
 	    die eval dw qw($table_qname \@list $table->{fields}{$list[0]}) if $table->{fields}{$list[0]}{ref};
-	    if(my $high = hv $low_table_names, $ref_table) { $ref_table = $high; }
 	    $table->{fields}{$list[0]}{ref} = { qtable => $ref_table, id => $ref_list[0],
 		(defined($on_delete) ? (on_delete => lc($on_delete)) : ()),
 		(defined($on_update) ? (on_update => lc($on_update)) : ()) };
@@ -217,7 +216,6 @@ read_mysql_struct_line:
 	die if @list != @ref_list;
 	die eval dw qw(\@list $table) unless $table->{fields}{$list[0]};
 	die eval dw qw($table->{name} \@list $table->{fields}{$list[0]}) if $table->{fields}{$list[0]}{ref};
-	if(my $high = hv $low_table_names, $ref_table) { $ref_table = $high; }
 	$table->{fields}{$list[0]}{ref} = { qtable => $ref_table, id => $ref_list[0], constraint => $name,
 	    (defined($on_delete) ? (on_delete => lc($on_delete)) : ()),
 	    (defined($on_update) ? (on_update => lc($on_update)) : ()) };
@@ -237,8 +235,8 @@ sub sql_alter_tables {
     my $old_struct = shift;
     my $new_struct = shift;
     my $ctx = {};
-    my @old = sort keys %{$old_struct->{tables} || {}};
-    my @new = sort keys %{$new_struct->{tables} || {}};
+    my @old = sort { $cmp_table->($a,$b) } keys %{$old_struct->{tables} || {}};
+    my @new = sort { $cmp_table->($a,$b) } keys %{$new_struct->{tables} || {}};
     my $need_table_nl;
     my $check_print = sub {
 	# В старом коде эта функция позволяла выводить информацию выборочно по одной/нескольким таблицам
@@ -263,9 +261,25 @@ sub sql_alter_tables {
 	}
 	&print_deferred_keys($ctx, $table);
     };
+    if($attrs{low_table_names}) {
+	my @t_old = @old;
+	my @t_new = @new;
+	while(@t_old && @t_new) {
+	    if((my $c = $cmp_table->($t_old[0], $t_new[0])) < 0) { shift @t_old; }
+	    elsif($c > 0) { shift @t_new; }
+	    else { $ctx->{low_table_names}{shift @t_old} = shift @t_new; }
+	}
+	foreach my $told (values %{$old_struct->{tables} || {}}) {
+	    foreach my $field (@{$told->{field_sequence}}) {
+		if(my $r = $field->{ref}) {
+		    if(my $high = $ctx->{low_table_names}{$r->{qtable}}) { $r->{qtable} = $high; }
+		}
+	    }
+	}
+    }
     while(@old && @new) {
-	if($old[0] lt $new[0]) { $drop->(shift @old); }
-	elsif($old[0] gt $new[0]) { $create->($new_struct->{tables}{shift @new}); }
+	if((my $c = $cmp_table->($old[0], $new[0])) < 0) { $drop->(shift @old); }
+	elsif($c > 0) { $create->($new_struct->{tables}{shift @new}); }
 	else {
 	    my $told = $old_struct->{tables}{shift @old};
 	    my $table = $new_struct->{tables}{shift @new};
