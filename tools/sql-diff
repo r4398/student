@@ -249,11 +249,11 @@ sub sql_alter_tables {
 		    elsif($f1[0]->{qname} gt $f2[0]->{qname}) { shift(@f2)->{new} = 1; }
 		    else {
 			my $f1 = shift @f1; my $f2 = shift @f2;
-			my $s1 = join '', &get_field_text($f1, 'data');
-			my $s2 = join '', &get_field_text($f2, 'data');
+			my $s1 = join '', &get_field_text($old_struct, $f1, 'data');
+			my $s2 = join '', &get_field_text($new_struct, $f2, 'data');
 			if($s1 ne $s2) { $f2->{differ} = 1; }
-			my $s1r = join '', &get_field_text($f1, 'ref');
-			my $s2r = join '', &get_field_text($f2, 'ref');
+			my $s1r = join '', &get_field_text($old_struct, $f1, 'ref');
+			my $s2r = join '', &get_field_text($new_struct, $f2, 'ref');
 			if($s1r ne $s2r) { $f2->{differ_ref} = 1; }
 		    }
 		}
@@ -297,6 +297,56 @@ sub sql_alter_tables {
     }
     while(@old) { $drop->(shift @old); }
     while(@new) { $create->(shift @new); }
+}
+
+sub get_field_text {
+    my $db = shift;
+    my $field = shift;
+    my $part = shift; # data | ref
+    my $gen_after = shift;
+    my $gen_data = shift;
+    return (!$part || $part eq 'data' ? ($field->{qname}, ($gen_data ? ("\t.\t") : (' ')), $field->{sql_type}, ($field->{not_null} ? ' not null' : ()),
+	($field->{default} ? (' default ', $field->{default}) : ($field->{sql_type} eq 'timestamp' && $field->{not_null}) ? (' default CURRENT_TIMESTAMP') : ()),
+	($field->{on_update} ? (' on update ', $field->{on_update}) : ($field->{sql_type} eq 'timestamp' && $field->{not_null} && !$field->{default}) ? (' on update CURRENT_TIMESTAMP') : ()),
+	($field->{auto_increment} ? (' auto_increment') : ())) : ()),
+	((!$part || $part eq 'ref') && $field->{ref} ? (
+	     ' references ', $field->{ref}{qtable}, ' (', &get_ref_id($db, $field), ')',
+	     ($field->{ref}{on_delete} ? (' on delete ', $field->{ref}{on_delete}) : ()),
+	     ($field->{ref}{on_update} ? (' on update ', $field->{ref}{on_delete}) : ()),
+	 ) : ()),
+	($gen_after ? (defined($field->{prev_field_name}) ? (' after ', $field->{prev_field_name}) : (' first')) : ());
+}
+
+sub get_field_sql {#+++
+    my $self = shift;
+    my $dbh = shift;
+    my $field = shift;
+    return $dbh->quote_identifier($field->{sql_name}), ' ', $field->{sql_type},
+	($field->{not_null} ? ' not' : ''), ' null',
+	(defined $field->{default} ? (' default ', $field->{default}) : ()),
+	(defined $field->{on_update} ? (' on update ', $field->{on_update}) : ()),
+	($field->{auto_increment} ? ' auto_increment' : ());
+}
+
+sub get_ref_id {#+++
+    my $self = shift;
+    my $field = shift;
+    die eval dw qw($field) unless $field->{ref};
+    return $field->{ref}{id} if $field->{ref}{id};
+    &Carp::confess(eval dw qw($field)) unless my $ref_table = $self->{data}{tables}{$field->{ref}{table}};
+    die unless $ref_table->{primary_key};
+    die eval dw qw($field) unless @{ $ref_table->{primary_key} } == 1;
+    return $ref_table->{primary_key}->[0];
+}
+
+sub get_ref_sql {#+++
+    my $self = shift;
+    my $dbh = shift;
+    my $field = shift;
+    return "foreign key (", $dbh->quote_identifier($field->{sql_name}), ') references ',
+	$dbh->quote_identifier($field->{ref}{sql_table}), #+++ $pp
+	' (', $dbh->quote_identifier($self->get_ref_id($field)), ')',
+	map($self->references_restrict($field, $_), 'on update', 'on delete');
 }
 
 sub read_mysql_trigger {
