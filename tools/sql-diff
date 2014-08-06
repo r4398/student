@@ -104,4 +104,51 @@ sub read_mysql_struct {
 
 sub read_mysql_trigger {
     my $ct = shift;
+    my $table = {};
+    my $qtn = $dbh->quote_identifier($table_name);
+    my $ct = $self->{attrs}{structure} ? $self->{attrs}{structure}{tables}{$table_name} : ($dbh->selectrow_array("show create table $qtn"))[1];
+#     warn eval &dw(qw($ct));
+    die eval dw qw($table_name $ct) unless $ct =~ /\ACREATE TABLE \Q$qtn\E \(\n/gc;
+    my $xn = qr/\`[^,\\\`]+\`/;
+    my $xnp = qr/\`([^,\\\`]+)\`/;
+    my $xk = qr/\(($xn(?:\s*,\s*$xn)*)\)/;
+    my $prev_field_name;
+read_mysql_struct_line:
+    my $comma = 0;
+    if($ct =~ /\G\s*\`([^\\\`]+)\`\s+(\w+(?:\([^\)]+\))?(?:\s+unsigned)?)(?:(\s+NOT\s+NULL)|\s+NULL)?(\s+AUTO_INCREMENT)?(?:\s+DEFAULT (?:NULL|(CURRENT_TIMESTAMP|b?'.*?')))?(?:\s+ON\s+UPDATE\s+(CURRENT_TIMESTAMP|'.*?'))?(?:\s+COMMENT\s+'.*')?(,?)\n/gc) {
+	my $field = {};
+	(@{$field}{qw(sql_name sql_type not_null auto_increment default on_update)}, $comma) = ($1,$2,$3,$4,$5,$6,$7);
+	if(my $t = $type_map{$field->{sql_type}}) { $field->{sql_type} = $t; }
+	push @{$table->{field_sequence}}, $field;
+	$table->{fields}{$field->{sql_name}} = $field;
+	$field->{prev_field_name} = $prev_field_name;
+	$prev_field_name = $field->{sql_name};
+    }
+    elsif($ct =~ /\G\s*PRIMARY\s+KEY\s*\((\`[^,\\\`]+\`(?:\s*,\s*\`[^,\\\`]+\`)*)\)(,?)\n/gc) {
+	(my($list),$comma) = ($1,$2);
+	$table->{primary_key} = [ &split_key_fields($list) ];
+    }
+    elsif($ct =~ /\G\s*(UNIQUE\s+)?KEY\s+(\`[^\\\`]+\`)\s*\((\`[^,\\\`]+\`(?:\s*,\s*\`[^,\\\`]+\`)*)\)(,?)\n/gc) {
+	(my($unique,$qname,$list),$comma) = ($1,$2,$3,$4);
+	push @{$table->{$unique ? 'unique_keys' : 'keys'}}, { qname => $qname, fields => [ &split_key_fields($list) ] };
+    }
+    elsif($ct =~ /\G\s*CONSTRAINT\s+($xn)\s+FOREIGN\s+KEY\s+$xk\s+REFERENCES\s+$xnp\s+$xk(?:\s+ON\s+DELETE\s+(CASCADE|NO\s+ACTION|SET\s+NULL))?(?:\s+ON\s+UPDATE\s+(CASCADE|NO\s+ACTION|SET\s+NULL))?(,?)\n/gc) {
+	(my($name,$list,$ref_table,$ref_list,$on_delete,$on_update),$comma) = ($1,$2,$3,$4,$5,$6,$7);
+	my @list = &split_key_fields($list);
+	my @ref_list = &split_key_fields($ref_list);
+	die if @list != 1; #+++
+	die if @list != @ref_list;
+	die unless $table->{fields}{$list[0]};
+	# die eval dw qw($list[0] $table->{fields}{$list[0]}{ref} $table $ct) if $table->{fields}{$list[0]}{ref};
+	die eval dw qw($table_name \@list $table->{fields}{$list[0]}) if $table->{fields}{$list[0]}{ref};
+	if(my $high = hv $self, 'low_table_names', $ref_table) { $ref_table = $high; }
+	$table->{fields}{$list[0]}{ref} = { sql_table => $ref_table, id => $ref_list[0], constraint => $name,
+	    (defined($on_delete) ? (on_delete => lc($on_delete)) : ()),
+	    (defined($on_update) ? (on_update => lc($on_update)) : ()) };
+    }
+    else { die eval &dw('pos($ct)', 'length($ct)', 'substr($ct, pos($ct), 20)', '$ct'); }
+    goto read_mysql_struct_line if $comma;
+    die unless $ct =~ /\G\) ENGINE=\w+(?: AUTO_INCREMENT=\d+)? DEFAULT CHARSET=\w+(?: COMMENT='.*')?\z/gc;
+    #+++ Обработать Engine и Charset
+    return $table;
 }
