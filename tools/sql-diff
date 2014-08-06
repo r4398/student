@@ -221,14 +221,14 @@ sub sql_alter_tables {
 	my $table = shift;
 	$ctx->{printed_tables}{$table->{qname}} = 1;
 	if($check_print->($table)) {
-	    &print_create_table($ctx, $table);
+	    &print_create_table($ctx, $old_struct, $table);
 	    $need_table_nl = 0;
 	}
 	&print_deferred_keys($ctx, $table);
     };
     while(@old && @new) {
 	if($old[0] lt $new[0]) { $drop->(shift @old); }
-	elsif($old[0] gt $new[0]) { $create->(shift @new); }
+	elsif($old[0] gt $new[0]) { $create->($new_struct->{tables}{shift @new}); }
 	else {
 	    my $told = $old_struct->{tables}{shift @old};
 	    my $table = $new_struct->{tables}{shift @new};
@@ -397,8 +397,8 @@ sub alter_keys {
     my $foreign = shift;
     my @l1 = sort { $a->{key} cmp $b->{key} } map { qname => $_->{qname}, key => join(',', @{$_->{fields}}) },
 	@{$told->{$kk} || []};
-    my @l2 = sort { $a->{key} cmp $b->{key} } map({ qname => $_->{qname}, key => join(',', @{$_->{fields}}) },
-	@{$table->{$kk} || []}),
+    my @l2 = sort { $a->{key} cmp $b->{key} }
+	map({ qname => $_->{qname}, key => join(',', @{$_->{fields}}), fields => $_->{fields} }, @{$table->{$kk} || []}),
 	($foreign ? map($_->{ref} ? { key => $_->{qname}, auto => 1 } : (), @{$table->{field_sequence}}) : ());
     while(@l1 && @l2) {
 	if($l1[0]->{key} lt $l2[0]->{key}) { my $k = shift @l1; $print_field->($drop_comment, '  drop key ', $k->{qname}); }
@@ -433,6 +433,44 @@ sub print_deferred_keys {
 	}
 	if(defined $prev) { print ";\n\n"; }
     }
+}
+
+sub print_create_table {
+    my $ctx = shift;
+    my $old_struct = shift;
+    my $table = shift;
+    print 'create table ', $table->{qname}, " (\n";
+    my $first_field = 1;
+    foreach my $field (@{$table->{field_sequence}}) { if($field) {
+	if($first_field) { undef $first_field; } else { print ",\n"; }
+	print "\t", &get_field_sql($field);
+	if($field->{ref}) {
+	    my @sql = &get_ref_sql($table, $field);
+	    if($ctx->{printed_tables}{$field->{ref}{qtable}} || $old_struct->{tables}{$field->{ref}{qtable}}) {
+		print ",\n\t", @sql;
+	    }
+	    else {
+		push @{$ctx->{deferred_keys}{$field->{ref}{qtable}}},
+		    [$table->{qname}, @sql];
+	    }
+	}
+    } }
+    if($table->{primary_key}) {
+	if($first_field) { undef $first_field; } else { print ",\n"; }
+	print "\tprimary key ", &quoted_key_fields($table->{primary_key});
+    }
+    if($table->{unique_keys}) { foreach my $unique (@{$table->{unique_keys}}) {
+	if($first_field) { undef $first_field; } else { print ",\n"; }
+	print "\tunique key ", &quoted_key_fields($unique);
+    } }
+    if($table->{keys}) { foreach my $key (@{$table->{keys}}) {
+	if($first_field) { undef $first_field; } else { print ",\n"; }
+	print "\tkey ", &quoted_key_fields($key);
+    } }
+    print "\n" unless $first_field;
+    print ") engine=InnoDB";
+    print " auto_increment=", $table->{start_auto_increment} if defined $table->{start_auto_increment};
+    print " character set=utf8;\n\n";
 }
 
 sub read_mysql_trigger {
