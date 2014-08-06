@@ -124,7 +124,9 @@ sub read_script {
 		last if $line =~ /\A\s*delimiter\s+;\s*\z/i;
 		$sql .= $line;
 	    }
-	    &read_mysql_trigger($sql);
+	    my $trigger = &read_mysql_trigger($sql);
+	    die eval dw qw($trigger $db->{triggers}{$trigger->{qname}}) if $db->{triggers}{$trigger->{qname}};
+	    $db->{triggers}{$trigger->{qname}} = $trigger;
 	}
 	elsif($line =~ /\A\s*\/\*!.*\*\/\s*;\s*\z/) {}
 	else { die eval dw qw($line); }
@@ -304,7 +306,6 @@ sub sql_alter_tables {
 		while(@f2) { $add_field->(shift @f2); }
 		&alter_keys($told, $table, $print_field, ($attrs{uncomment_drops} ? '' : '-- '), 'unique_keys', 'unique');
 		&alter_keys($told, $table, $print_field, ($attrs{uncomment_drops} ? '' : '-- '), 'keys', 'key', 'foreign');
-		#+++
 		if($header_printed) {
 		    print "\n", @comments if @comments;
 		    print "\n;\n\n";
@@ -486,9 +487,79 @@ sub print_create_table {
 
 sub read_mysql_trigger {
     my $ct = shift;
+    if($ct =~ /\A\s*\s*(?:--\s*)?drop\s+trigger\s+`.+?`\s*;+\s+create\s+trigger\s+(`.+?`)\s+(before|after)\s+(insert|update|delete)\s+on\s+(`.+?`)\s+(for\s+each\s+row)\s+(begin\s.*\bend)(?:\s*;)?\s*;+\s*\z/si) {
+	my $trigger = {};
+	@{$trigger}{qw(qname time action qtable each body)} = ($1,$2,$3,$4,$5,$6);
+	# warn eval dw qw($trigger $ct);
+	return $trigger
+    }
+    else {
+	die eval dw qw($ct);
+    }
 }
 
 sub sql_alter_triggers {
     my $old_struct = shift;
     my $new_struct = shift;
+    my @old = sort { $a->{qname} cmp $b->{qname} } values %{$old_struct->{triggers} || {}};
+    my @new = sort { $a->{qname} cmp $b->{qname} } values %{$new_struct->{triggers} || {}};
+    my $need_nl;
+    my $check_print = sub {
+	my $t = shift;
+	if(1) { return $t; }
+	else { return; }
+    };
+    my $drop = sub {
+	my $t = shift;
+	my $force = shift;
+	if($check_print->($t)) {
+	    print "\n" if $need_nl;
+	    print +($force || $attrs{uncomment_drops} ? '' : '-- '), 'drop trigger ', $t->{qname}, ";\n";
+	    $need_nl = 0;
+	}
+    };
+    my $create = sub {
+	my $t = shift;
+	if($check_print->($t)) {
+	    print "\n" if $need_nl;
+	    print "delimiter ;;;\n";
+	    &print_create_trigger($t);
+	    print "delimiter ;\n";
+	    $need_nl = 1;
+	}
+    };
+    while(@old && @new) {
+	if($old[0]->{qname} lt $new[0]->{qname}) { $drop->(shift @old); }
+	elsif($old[0]->{qname} gt $new[0]->{qname}) { $create->(shift @new); }
+	else {
+	    my $told = shift @old;
+	    my $tnew = shift @new;
+	    if($check_print->($tnew)) {
+		my $differ;
+		foreach my $k (qw(action qtable time)) {
+		    if(lc($told->{$k}) ne lc($tnew->{$k})) { $differ = 1; last; }
+		}
+		if(!$differ && lc($told->{body}) ne lc($tnew->{body})) { $differ = 1; }
+		if($differ) {
+		    if($need_nl) {
+			print "\n";
+			undef $need_nl;
+		    }
+		    print "lock tables ", $tnew->{qtable}, " write;\n";
+		    $drop->($told, 'force');
+		    $create->($tnew);
+		    print "unlock tables;\n";
+		}
+	    }
+	}
+    }
+    while(@old) { $drop->(shift @old); }
+    while(@new) { $create->(shift @new); }
+}
+
+sub print_create_trigger {
+    my $trigger = shift;
+    print 'create trigger ', $trigger->{qname}, ' ', $trigger->{time}, ' ', $trigger->{action},
+	' on ', $trigger->{qtable}, ' ', $trigger->{each}, ' ',
+	"\n", $trigger->{body}, "\n;;;\n\n";
 }
