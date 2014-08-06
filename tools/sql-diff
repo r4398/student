@@ -134,8 +134,17 @@ read_mysql_struct_line:
 	(my($unique,$qname,$list),$comma) = ($1,$2,$3,$4);
 	push @{$table->{$unique ? 'unique_keys' : 'keys'}}, { qname => $qname, fields => [ &split_key_fields($list) ] };
     }
-    elsif($ct =~ /\G\s*CONSTRAINT\s+($xn)\s+FOREIGN\s+KEY\s+$xk\s+REFERENCES\s+$xnp\s+$xk(?:\s+ON\s+DELETE\s+(CASCADE|NO\s+ACTION|SET\s+NULL))?(?:\s+ON\s+UPDATE\s+(CASCADE|NO\s+ACTION|SET\s+NULL))?(,?)\n/gci) {
-	(my($name,$list,$ref_table,$ref_list,$on_delete,$on_update),$comma) = ($1,$2,$3,$4,$5,$6,$7);
+    elsif($ct =~ /\G\s*(?:CONSTRAINT\s+($xn)\s+)?FOREIGN\s+KEY\s+$xk\s+REFERENCES\s+$xnp\s+$xk/gci) {
+	my($name,$list,$ref_table,$ref_list) = ($1,$2,$3,$4);
+	my($on_delete,$on_update);
+	while($ct =~ /\G(?:\s+ON\s+(DELETE|UPDATE)\s+(CASCADE|NO\s+ACTION|SET\s+NULL|RESTRICT)){0,2}((,?)\n)/gci) {
+	    my($k,$a,$x,$c) = ($1,$2,$3,$4);
+	    unless($k) { die eval dw qw($k $a $x $c), 'pos($ct)', 'length($ct)', 'substr($ct, pos($ct), 20)', '$ct' unless $x; }
+	    elsif('DELETE' eq uc $k) { $on_delete = $a; }
+	    elsif('UPDATE' eq uc $k) { $on_update = $a; }
+	    else { die; }
+	    if($x ne '') { $comma = $c; last; }
+	}
 	my @list = &split_key_fields($list);
 	my @ref_list = &split_key_fields($ref_list);
 	die if @list != 1; #+++
