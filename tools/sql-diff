@@ -395,8 +395,9 @@ sub alter_keys {
     my $foreign = shift;
     my @l1 = sort { $a->{key} cmp $b->{key} } map { qname => $_->{qname}, key => join(',', @{$_->{fields}}) },
 	@{$told->{$kk} || []};
-    my @l2 = sort { $a->{key} cmp $b->{key} } map { qname => $_->{qname}, key => join(',', @{$_->{fields}}) },
-	@{$table->{$kk} || []};
+    my @l2 = sort { $a->{key} cmp $b->{key} } map({ qname => $_->{qname}, key => join(',', @{$_->{fields}}) },
+	@{$table->{$kk} || []}),
+	($foreign ? map($_->{ref} ? { key => $_->{qname}, auto => 1 } : (), @{$table->{field_sequence}}) : ());
     while(@l1 && @l2) {
 	if($l1[0]->{key} lt $l2[0]->{key}) { my $k = shift @l1; $print_field->($drop_comment, '  drop key ', $k->{qname}); }
 	elsif($l1[0]->{key} gt $l2[0]->{key}) { my $k = shift @l2; $print_field->('  add ', $kn, ' ', &quoted_key_fields($k->{fields})) unless $k->{auto}; }
