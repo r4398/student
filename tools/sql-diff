@@ -16,13 +16,17 @@ while(@ARGV) {
 	die eval dw qw($new_script $old $key \@ARGV) unless @ARGV && !defined $old;
 	$old->{script} = shift @ARGV;
     }
-    elsif($key eq '--db') {
+    elsif($key eq '--db' || $key eq '-db' || $key eq '--database') {
 	die eval dw qw($new_script $old $key \@ARGV) unless @ARGV && !exists($old->{script}) && !exists($old->{db});
 	$old->{db} = shift @ARGV;
     }
     elsif($key eq '--defaults-file') {
-	die eval dw qw($new_script $old $key \@ARGV) unless @ARGV && !exists($old->{script}) && !exists($old->{defaults_file});
+	die eval dw qw($new_script $old $key \@ARGV) unless @ARGV && !exists($old->{script}) && !exists($old->{defaults_file}) && !exists($old->{no_defaults_file});
 	$old->{defaults_file} = shift @ARGV;
+    }
+    elsif($key eq '--no-defaults-file') {
+	die eval dw qw($new_script $old $key \@ARGV) unless !exists($old->{script}) && !exists($old->{defaults_file});
+	++$old->{no_defaults_file};
     }
     elsif($key eq '--host' || $key eq '-h') {
 	die eval dw qw($new_script $old $key \@ARGV) unless @ARGV && !exists($old->{script}) && !exists($old->{host});
@@ -61,7 +65,37 @@ my %type_map = (
 my $new_struct = &read_script($new_script);
 my $old_struct;
 if($old->{script}) { $old_struct = &read_script($old->{script}); }
-else { die '+++ ', eval dw qw($old); }
+else {
+    if($old->{read_password}) {
+	STDOUT->printflush('Password: ');
+	system qw(stty -echo);
+	chomp($old->{password} = <STDIN>);
+	system qw(stty echo);
+	STDOUT->printflush("\n");
+    }
+    require DBI;
+    my $dbh = DBI->connect('DBI:mysql:'.$old->{db}.($old->{host} ? ':'.$old->{host} : '').
+			   ($old->{no_defaults_file} ? '' : ';mysql_read_default_file='.($old->{defaults_file} // '~/.my.cnf')),
+			   $old->{user}, $old->{password},
+			   {RaiseError=>1,PrintError=>0,ShowErrorStatement=>1});
+    # die '+++ ', eval dw qw($old);
+    {   my $q = $dbh->prepare('show tables');
+	$q->execute;
+	while(my($table_name) =  $q->fetchrow) {
+	    my $table_qname = $dbh->quote_identifier($table_name);
+	    my $ct = ($dbh->selectrow_array("show create table $table_qname"))[1];
+	    $old_struct->{tables}{$table_qname} = &read_mysql_struct($ct);
+	}
+    }
+    {   my $q = $dbh->prepare('show triggers');
+	$q->execute;
+	while(my($name, $action, $table, $body, $time) = $q->fetchrow) {
+	    my $qname = $dbh->quote_identifier($name);
+	    $old_struct->{triggers}{$qname} = { qname => $qname, action => $action, qtable => $dbh->quote_identifier($table),
+						body => $body, time => $time, each => 'for each row'};
+	}
+    }
+}
 
 &sql_alter_tables($old_struct, $new_struct);
 &sql_alter_triggers($old_struct, $new_struct);
