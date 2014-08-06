@@ -263,7 +263,9 @@ sub sql_alter_tables {
 		my $add_field = sub {
 		    my $field = shift;
 		    $print_field->('  add ', &get_field_sql($field), !@_ ? () : !$_[0] ? ' first' : (' after ', shift->{qname}));
-		    $print_field->('  add ', &get_ref_sql($new_struct, $field)) if $field->{ref};
+		    if($field->{ref}) {
+			&add_foreign_deferred($ctx, $old_struct, $table, $field, sub { $print_field->('  add ', @_); });
+		    }
 		};
 		my @f1 = sort { $a->{qname} cmp $b->{qname} } @{$told->{field_sequence}};
 		my @f2 = sort { $a->{qname} cmp $b->{qname} } @{$table->{field_sequence}};
@@ -291,8 +293,9 @@ sub sql_alter_tables {
 		    else {
 			$print_field->('  drop foreign key ', $f1[0]->{ref}{constraint}) if $f1[0]->{ref} && $f2[0]->{differ_ref};
 			$print_field->('  modify ', &get_field_sql($f2[0])) if $f2[0]->{differ};
-			$print_field->('  add ', &get_ref_sql($new_struct, $f2[0]))
-			    if $f2[0]->{ref} && $f2[0]->{differ_ref};
+			if($f2[0]->{ref} && $f2[0]->{differ_ref}) {
+			    &add_foreign_deferred($ctx, $old_struct, $table, $f2[0], sub { $print_field->('  add ', @_); });
+			}
 			#+++ field sequence change
 			shift @f1; $prev_field = shift @f2;
 		    }
@@ -436,6 +439,22 @@ sub print_deferred_keys {
     }
 }
 
+sub add_foreign_deferred {
+    my $ctx = shift;
+    my $old_struct = shift;
+    my $table = shift;
+    my $field = shift;
+    my $add = shift;
+    my @sql = &get_ref_sql($table, $field);
+    if($ctx->{printed_tables}{$field->{ref}{qtable}} || $old_struct->{tables}{$field->{ref}{qtable}}) {
+	$add->(@sql);
+    }
+    else {
+	push @{$ctx->{deferred_keys}{$field->{ref}{qtable}}},
+	[$table->{qname}, @sql];
+    }
+}
+
 sub print_create_table {
     my $ctx = shift;
     my $old_struct = shift;
@@ -446,14 +465,7 @@ sub print_create_table {
 	if($first_field) { undef $first_field; } else { print ",\n"; }
 	print "\t", &get_field_sql($field);
 	if($field->{ref}) {
-	    my @sql = &get_ref_sql($table, $field);
-	    if($ctx->{printed_tables}{$field->{ref}{qtable}} || $old_struct->{tables}{$field->{ref}{qtable}}) {
-		print ",\n\t", @sql;
-	    }
-	    else {
-		push @{$ctx->{deferred_keys}{$field->{ref}{qtable}}},
-		    [$table->{qname}, @sql];
-	    }
+	    &add_foreign_deferred($ctx, $old_struct, $table, $field, sub { print ",\n\t", @_; });
 	}
     } }
     if($table->{primary_key}) {
