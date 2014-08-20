@@ -5,6 +5,13 @@
 
     var plugin
 
+    // function Test() {
+    // 	if(this == window) return new Test()
+    // 	else {
+    // 	    this.f1 = 0
+    // 	}
+    // }
+
     function Context() {
 	return {
 	    lists: 0,
@@ -18,9 +25,9 @@
 		++this.lists
 		$(document.body).append($('<ul/>').append($('<li/>').text(text)))
 	    },
-	    log: function() {
-		console.log(this)
-	    },
+	    // log: function() {
+	    // 	console.log(this)
+	    // },
 	}
     }
 
@@ -59,7 +66,6 @@
 		}
 		ctx.paragraph(line)
 	    }
-	    ctx.log()
 	}})
     }
 
