@@ -14,16 +14,31 @@
 
     function Context() {
 	return {
-	    lists: 0,
+	    lists: [],
 	    paragraph: function(text) {
+		this.lists = []
 		$(document.body).append($('<p/>').text(text))
 	    },
 	    header: function(level, text) {
+		this.lists = []
 		$(document.body).append($('<h'+level+'/>').text(text))
 	    },
 	    list: function(list, text) {
-		++this.lists
-		$(document.body).append($('<ul/>').append($('<li/>').text(text)))
+		var i
+		for(i = 0; i < this.lists.length; ++i)
+		    if(this.lists[i][0] != list[i]) {
+			this.lists.length = i
+			break
+		    }
+		var j
+		for(j = i; j < list.length; ++j) {
+		    var list_node = $( list[j] == '*' ? '<ul/>' : '<ol/>');
+		    if(j) this.lists[j-1][2].append(list_node)
+		    else $(document.body).append(list_node)
+		    this.lists[j] = [list[j], list_node]
+		}
+		var li = this.lists[this.lists.length-1][2] = $('<li/>').text(text)
+		this.lists[this.lists.length-1][1].append(li)
 	    },
 	    // log: function() {
 	    // 	console.log(this)
