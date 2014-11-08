@@ -1,5 +1,5 @@
 Задача: вывести blog через http.
-Компоненты: Blog, PageGen, PageAuto, Reshu, SyncFiles.
+Компоненты: Blog, PageGen, PageAuto, Reshu, SyncFiles, Auth.
 Blog: собственно приложение.
 PageGen: библиотека для формирования HTML, использовать существующую разработку, подготовить доку.
 PageAuto: простое в использовании отображение URL в модули Perl, вырезать из dbedit, подготовить доку.
