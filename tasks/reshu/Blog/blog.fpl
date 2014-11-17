@@ -3,12 +3,6 @@
 use strict;
 use warnings;
 use bytes;
-use FCGI;
-
-my $request = FCGI::Request();
-
-while($request->Accept() >= 0) {
-    print "Content-type: text/html\r\n\r\ndone\r\n";
-    print "<br />\r\n";
-    print `id`;
-}
+use Reshu::Lib qw(../../../site_perl);
+require FCGI::AutoPage::Application;
+&FCGI::AutoPage::Application::run('Student::Blog');
