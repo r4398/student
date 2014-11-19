@@ -3,6 +3,6 @@ package Student::Blog;
 use strict;
 use warnings;
 use bytes;
-use base qw(FCGI::AutoPage::Application::Base);
 use Student::Blog::Page ':all';
+use base qw(FCGI::AutoPage::Application::Base);
 1;
