@@ -3,6 +3,6 @@
 use strict;
 use warnings;
 use bytes;
-use Reshu::Lib qw(../../../site_perl);
+use Reshu::Lib qw(site_perl ../AutoPage/site_perl);
 require FCGI::AutoPage::Application;
 &FCGI::AutoPage::Application::run('Student::Blog');
