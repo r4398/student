@@ -10,7 +10,7 @@ my $request = FCGI::Request();
 while($request->Accept() >= 0) {
     print "Content-type: text/html\r\n\r\ndone\r\n";
     print "$$\r\n";
-    print "$<\r\n";
+    print "$< $>\r\n";
     print "$ENV{USER}\r\n";
     print "<br />\r\n";
     print `id`;
