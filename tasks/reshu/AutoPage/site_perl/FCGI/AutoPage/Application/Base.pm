@@ -213,4 +213,10 @@ sub delete_memory_recursive_links {
     delete $self->{rr};
 }
 
+sub env {
+    my $self = shift;
+    return $self->{r}->GetEnvironment;
+}
+
 sub title { 'Приложение в Паутине' }
+sub app_path { $_[0]->env->{SCRIPT_NAME} }
