@@ -47,20 +47,20 @@ sub load_page {
 }
 
 sub path_switch {
-    my $self = shift;
+    my $app = shift;
     my $uri = shift;
     my($name,$rest) = (split '/', $uri, 3)[1,2];
     foreach my $pkg (@pages) {
-	if(my $page = $pages{$pkg}{$name}) { return $page->new($self, $rest)->print_page(); }
+	if(my $page = $pages{$pkg}{$name}) { return $page->new($app, $rest)->print_page(); }
     }
     return;
 }
 
 sub path_switch_root {
-    my $self = shift;
+    my $app = shift;
     my $root = shift;
     my $uri = shift;
     my($name,$rest) = (split '/', $uri, 3)[1,2];
-    if(my $page = $pages{$root}{$name}) { return $page->new($self, $rest)->print_page(); }
+    if(my $page = $pages{$root}{$name}) { return $page->new($app, $rest)->print_page(); }
     return;
 }

@@ -5,6 +5,7 @@ use warnings;
 use bytes;
 use POSIX qw(&strftime);
 use Reshu::Utils;
+require FCGI::AutoPage;
 
 use constant HTTP_OK => 200;
 use constant REDIRECT => 302;
@@ -23,6 +24,8 @@ sub run {
     # 	if(substr($v,0,1) ne '/' || substr($v,0,10) eq '/usr/home/') { $inc{$k} = $v; }
     # }
     # warn eval dw qw($class \@_ \%inc);
+    # warn eval dw qw(\@FCGI::AutoPage::pages \%FCGI::AutoPage::pages);
+    # return;
     my $conf = $class->conf;
     require FCGI;
     my $request = FCGI::Request();
@@ -65,6 +68,14 @@ sub new {
     my $conf = shift;
     my $request = shift;
     return bless { r => $request, conf => $conf }, ref($class) || $class;
+}
+
+sub switch {
+    my $self = shift;
+    my $uri = $self->{r}->GetEnvironment->{PATH_INFO};
+    unless(defined($uri) && $uri ne '') { $uri = '/'; }
+    if(my $rc = FCGI::AutoPage::path_switch($self, $uri)) { return $rc; }
+    else { return $self->not_found; }
 }
 
 sub log {
