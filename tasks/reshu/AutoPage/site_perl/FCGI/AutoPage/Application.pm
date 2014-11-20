@@ -4,6 +4,9 @@ use strict;
 use warnings;
 use bytes;
 
+our $first_request = 1;
+our $start_time; BEGIN { $start_time = time; }
+
 sub run {
     my $pkg = shift;
     eval "require $pkg; $pkg\->run;";
