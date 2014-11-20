@@ -1,0 +1,17 @@
+#!/usr/bin/perl -w
+# Автор: Юрий Решетников <reshu@mail.ru>
+use strict;
+use warnings;
+use bytes;
+use Reshu::Utils;
+require FCGI;
+my $request = FCGI::Request();
+while($request->Accept() >= 0) {
+    print "Content-type: text/html\r\n\r\ndone\r\n";
+    print "$$\r\n";
+    print "<br />\r\n";
+    print `id`;
+    print "<pre>\r\n";
+    print eval dw qw($request->GetEnvironment);
+    print "</pre>\r\n";
+}
