@@ -16,7 +16,7 @@ sub import {
 sub reg_page_uri {
     my $pkg = shift;
     my $callpkg = shift;
-    if(my $uri = $pkg->page_uri) { $DbEdit::AutoPage::pages{$callpkg}{$uri} = $pkg; }
+    if(defined(my $uri = $pkg->page_uri)) { $FCGI::AutoPage::pages{$callpkg}{$uri} = $pkg; }
     # В некоторых случаях нам требуется стандартная страница, которая не будет отображаться по стандартным uri,
 }
 
@@ -49,6 +49,8 @@ sub menu_link {		# Для тех случаев, когда в меню не п�
     my $self = shift;
     ['a',{href => join('/', $self->page_path()), $self->menu_attrs()}, $self->page_title()];
 }
+
+sub check_access {}
 
 sub pagegen_class { return; }
 
@@ -151,4 +153,4 @@ sub get {
 }
 
 sub web { return shift->{web}; }
-sub script_name { return shift->{web}{r}{env}{SCRIPT_NAME}; }
+sub script_name { return shift->{web}->env->{SCRIPT_NAME}; }

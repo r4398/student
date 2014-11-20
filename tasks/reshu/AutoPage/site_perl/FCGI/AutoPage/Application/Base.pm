@@ -78,13 +78,49 @@ sub switch {
     else { return $self->not_found; }
 }
 
+sub top_menu { ; }
+
+sub border_page {
+    my $web = shift;
+    my $page = shift;
+    local $page->{in_border_page} = 1;
+    my $db_caption = $web->title;
+    $web->rr->doc(
+	{
+	    title => do { if(my $pt = $page->page_title) { $db_caption.' | '.$pt; } else { $db_caption; } },
+	    js => [ @DbEdit::Conf::jquery_js ],
+	    css_links => [ @DbEdit::Conf::jquery_css ],
+	    $page->doc_attrs,
+	},
+	['js', 'window.HrefBase = ', ['jss', $page->script_name], ';' ],
+	['join', ' ',
+	    ['a', { href => $web->app_path }, $db_caption],
+	    $web->top_menu,
+	],
+	['hr'],
+	@_,
+    );
+    return &HTTP_OK;
+}
+
+sub noborder_page {
+    my $web = shift;
+    my $page = shift;
+    local $page->{in_border_page} = 1;
+    $web->rr->doc(
+	{ title => $web->title.' | '.$page->page_title, $page->doc_attrs },
+	@_,
+    );
+    return &HTTP_OK;
+}
+
 sub not_found {
     my $web = shift;
     $web->rr->doc(
 	{ title => $web->title },
 	'Указанная страница не найдена',
     );
-    return &DbEdit::Request::NOT_FOUND;
+    return &NOT_FOUND;
 }
 
 sub rr {
