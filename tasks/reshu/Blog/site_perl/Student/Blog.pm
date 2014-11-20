@@ -6,3 +6,5 @@ use bytes;
 use Student::Blog::Page ':all';
 use base qw(FCGI::AutoPage::Application::Base);
 1;
+
+sub title { 'Блог' }

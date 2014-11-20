@@ -4,6 +4,7 @@ use strict;
 use warnings;
 use bytes;
 use POSIX qw(&strftime);
+require Scalar::Util;
 use Reshu::Utils;
 require FCGI::AutoPage;
 
@@ -39,7 +40,6 @@ sub run {
 	my $self = $class->new($conf, $request);
 	$self->log_request;
 	my $ret = eval { $self->switch; };
-	#TODO ??? delete $self->{rr}{web};
 	if(my $err = $@) {
 	    warn $err;
 	    $ret = SERVER_ERROR;
@@ -78,6 +78,103 @@ sub switch {
     else { return $self->not_found; }
 }
 
+sub not_found {
+    my $web = shift;
+    $web->rr->doc(
+	{ title => $web->title },
+	'Указанная страница не найдена',
+    );
+    return &DbEdit::Request::NOT_FOUND;
+}
+
+sub rr {
+    my $self = shift;
+    if(@_) {
+	if(ref $_[0]) {
+	    if($self->{rr}) { die; }
+	    my $p = shift;
+	    if(!$p->isa('PageGen::Generic')) { die; }
+	    $self->{rr} = $p;
+	    $self->{rr}{web} = $self;
+	}
+	else {
+	    my $class = shift;
+	    if($self->{rr}) {
+		if(!$self->{rr}->isa($class)) { die; }
+	    }
+	    elsif(!$class->isa('PageGen::Generic')) { die; }
+	    else {
+		$self->{rr} = $class->new($self);
+		$self->{rr}{web} = $self;
+	    }
+	}
+    }
+    elsif(!$self->{rr}) {
+	require PageGen::HTML;
+	$self->{rr} = PageGen::HTML->new($self);
+	$self->{rr}{web} = $self;
+    }
+    return $self->{rr};
+}
+
+sub headers_out_add {
+    my $r = shift;
+    die if $r->{header_sent};
+    if(@_ % 2) { die; }
+    push @{$r->{headers_out}}, @_;
+}
+
+sub headers_out_set {
+    my $r = shift;
+    die if $r->{header_sent};
+    if(@_ % 2) { die; }
+    for(my $i = 0; $i < @_; ) {
+	my $k = $_[$i++];
+	my $v = $_[$i++];
+	my $changed;
+	if($r->{headers_out}) {
+	    for(my $j = 0; $j < @{$r->{headers_out}}; $j++) {
+		if($k eq $r->{headers_out}->[$j++]) {
+		    $r->{headers_out}->[$j] = $v;
+		    $changed = 1;
+		    last;
+		}
+	    }
+	}
+	if(!$changed) { push @{$r->{headers_out}}, $k, $v; }
+    }
+}
+
+sub no_cache {
+    my $r = shift;
+    my $v = shift; if(!$v) { die; }
+    $r->headers_out_set(Pragma => 'no-cache');
+    $r->headers_out_set('Cache-control' => 'no-cache');
+}
+
+sub send_http_header {
+    my $r = shift;
+    my $content = shift;
+    if($r->{header_sent}) { die; }
+    if(defined $content) { $r->headers_out_set('Content-Type' => $content); }
+    if(!$r->{headers_out}) { dieN 5, "Empty request headers_out"; }
+    $r->{header_sent} = 1;
+    for(my $i = 0; $i < @{$r->{headers_out}}; ) {
+	my $k = $r->{headers_out}->[$i++];
+	my $v = $r->{headers_out}->[$i++];
+	$r->print("$k: $v\n");
+    }
+    $r->print("\n");
+}
+
+sub print {
+    my $r = shift;
+    if(!$r->{header_sent}) { die 'no headers sent before print'; }
+    print @_;
+}
+
+sub printf { my $r = shift; $r->print(sprintf(@_)); }
+
 sub log {
     my $self = shift;
     print STDERR join("\t", strftime('%x %X', localtime), hvn($>, $self, qw(conf system_user)), "[$$]", $self->real_client_addr,
@@ -109,4 +206,11 @@ sub real_client_addr {
     return $self->{r}->GetEnvironment->{REMOTE_ADDR} // 'local';
 }
 
-sub delete_memory_recursive_links { ; } # Освобождение памяти после обработки запроса в случае необходимости
+sub delete_memory_recursive_links {
+    # Освобождение памяти после обработки запроса в случае необходимости
+    my $self = shift;
+    delete $self->{rr}{web};
+    delete $self->{rr};
+}
+
+sub title { 'Приложение в Паутине' }
