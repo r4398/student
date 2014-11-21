@@ -19,6 +19,8 @@ use constant STDOUT_BUF_SIZE => 4096;
 # Fields:
 ###############
 # accept
+# accept_wh
+# accept_inc
 # accepted
 # terminated
 # changed
@@ -117,7 +119,14 @@ sub check_ev {
 		&EV::unloop();
 	    }
 	});
-	#TODO stat $0 and %INC
+	foreach my $f ($0, values %INC) {
+	    $r->{accept_inc}{$f} = &EV::stat($f, 0, sub {
+		unless($r->{changed}) {
+		    $r->{changed} = 1;
+		    msg 'changed', $f;
+		}
+	    });
+	}
     }
     else {
 	msg "EV not found, using select";
