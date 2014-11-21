@@ -61,9 +61,23 @@ sub new {
 sub switch {
     my $self = shift;
     my $uri = $self->env->{PATH_INFO};
-    unless(defined($uri) && $uri ne '') { $uri = '/'; }
+    if(my $rc = $self->check_empty_path($uri)) { return $rc; }
     if(my $rc = AutoPage::path_switch($self, $uri)) { return $rc; }
     else { return $self->not_found; }
+}
+
+sub check_empty_path_ignore {
+    unless(defined($_[1]) && $_[1] ne '') { $_[1] = '/'; }
+    return;
+}
+
+# sub check_empty_path { shift->check_empty_path_ignore(@_); }
+
+sub check_empty_path {
+    my $self = shift;
+    my $uri = shift;
+    unless(defined($uri) && $uri ne '') { return $self->redirect($self->proto_host_port.$self->app_path.'/'); }
+    return;
 }
 
 sub top_menu { ; }
@@ -109,6 +123,27 @@ sub not_found {
 	'Указанная страница не найдена',
     );
     return &NOT_FOUND;
+}
+
+sub forbidden {
+    my $web = shift;
+    $web->rr->doc(
+	{ title => "БД ".$web->{meta}{label} },
+	'Отказано в доступе',
+    );
+    return &FORBIDDEN;
+}
+
+sub redirect {
+    my $web = shift;
+    my $location = shift;
+    $web->{r}->headers_out_set(Location => $location);
+    $web->rr->doc(
+	{ title => 'Страница перемещена' },
+	['js', 'document.location.href = ', ['jss', $location], ';'],
+	['p', 'Страница перемещена. Перейдите по ', ['a', { href => $location }, 'ссылке'], '.'],
+    );
+    return &REDIRECT;
 }
 
 sub server_error {
@@ -200,3 +235,12 @@ sub env { $_[0]{r}{env}; }
 
 sub title { 'Приложение в Паутине' }
 sub app_path { $_[0]->env->{SCRIPT_NAME} }
+
+sub proto_host_port {
+    my $web = shift;
+    my $env = $web->env;
+    #+++ https
+    return 'http://' . (
+	$env->{HTTP_HOST} || ($env->{SERVER_NAME}.($env->{SERVER_PORT} != 80 ? ':'.$env->{SERVER_PORT} : ''))
+    );
+}

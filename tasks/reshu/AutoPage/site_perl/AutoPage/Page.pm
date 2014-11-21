@@ -34,11 +34,7 @@ sub page_addr {
     my $self = shift;
     my $attr = { @_ };
     if($attr->{full_uri}) {
-	my $env = $self->{web}->env;
-	#+++ https
-	return 'http://' . (
-	    $env->{HTTP_HOST} || ($env->{SERVER_NAME}.($env->{SERVER_PORT} != 80 ? ':'.$env->{SERVER_PORT} : ''))
-	) . join '/', $self->{web}->app_path, $self->page_path;
+	return $self->{web}->proto_host_port . join '/', $self->{web}->app_path, $self->page_path;
     }
     else { return join '/', $self->{web}->app_path, $self->page_path; }
 }
