@@ -198,7 +198,6 @@ sub read_get {
 sub print {
     my $r = shift;
     if(!$r->{header_sent}) { die 'no headers sent before print'; }
-    use bytes;
     foreach my $s (@_) {
 	if(!defined $s) { warnN 3, "undefined value in args"; next; }
 	if(length($r->{stdout_buf}) + length($s) < STDOUT_BUF_SIZE) {
@@ -216,7 +215,6 @@ sub print {
 	    $r->{stdout_buf} = substr($s, $n);
 	}
     }
-    no bytes;
 }
 
 sub printf { my $r = shift; $r->print(sprintf(@_)); }
@@ -246,12 +244,10 @@ sub write_packet {
     my $type = shift;
     my $req_id = shift;
     my $data = shift;
-    use bytes;
     my $padding = (8 - length($data) % 8) % 8;
     my $header = pack('CCnnCC', FCGI_VERSION_1, $type, $req_id,
 	length($data), $padding, 0);
     $sock->printflush($header, $data, $padding ? ("\0" x $padding) : ());
-    no bytes;
 }
 
 sub get_nv_len {

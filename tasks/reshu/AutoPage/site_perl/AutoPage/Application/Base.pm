@@ -21,14 +21,8 @@ sub run {
     # warn eval dw qw(\@AutoPage::pages \%AutoPage::pages);
     # return;
     my $conf = $class->conf;
-    require FCGI;
-    my $request = FCGI::Request();
-    unless($request->IsFastCGI) {
-	$ENV{REQUEST_METHOD} //= 'TEST';
-	$ENV{SCRIPT_NAME} //= $0;
-	$ENV{PATH_INFO} //= '';
-    }
-    while($request->Accept() >= 0) {
+    my $request = AutoPage::FCGI->new;
+    while($request->accept) {
 	my $start_mark = time;
 	my $self = $class->new($conf, $request);
 	$self->log_request;
@@ -36,16 +30,16 @@ sub run {
 	if(my $err = $@) {
 	    warn $err;
 	    $ret = SERVER_ERROR;
-	    if(!$self->{header_sent}) {
-		delete $self->{headers_out};
-		$self->no_cache(1);
-		$self->send_http_header('text/html; charset='.($self->{errors_charset} || $conf->{errors_charset} || 'utf8'));
+	    if(!$self->{r}{header_sent}) {
+		delete $self->{r}{headers_out};
+		$self->{r}->no_cache(1);
+		$self->{r}->send_http_header('text/html; charset='.($self->{errors_charset} || $conf->{errors_charset} || 'utf8'));
 	    }
 	    #TODO ??? $self->print_errors($self->{meta_errors});
-	    print join '', map "<P STYLE=\"color: red;\">".&escape_html($_)."</P>\n", split "\n", $err;
+	    $self->{r}->print(join '', map "<P STYLE=\"color: red;\">".&escape_html($_)."</P>\n", split "\n", $err);
 	}
-	if(defined $ret) { $self->{status} = $ret; }
-	else { $self->{status} = HTTP_OK; }
+	if(defined $ret) { $self->{r}{status} = $ret; }
+	else { $self->{r}{status} = HTTP_OK; }
 	$self->log_result($start_mark);
 	$self->delete_memory_recursive_links();
     }
@@ -53,7 +47,7 @@ sub run {
 
 sub conf {
     my $class = shift;
-    return { system_user => scalar getpwuid $> };
+    return {};
 }
 
 sub new {
@@ -65,7 +59,7 @@ sub new {
 
 sub switch {
     my $self = shift;
-    my $uri = $self->{r}->GetEnvironment->{PATH_INFO};
+    my $uri = $self->env->{PATH_INFO};
     unless(defined($uri) && $uri ne '') { $uri = '/'; }
     if(my $rc = AutoPage::path_switch($self, $uri)) { return $rc; }
     else { return $self->not_found; }
@@ -116,6 +110,19 @@ sub not_found {
     return &NOT_FOUND;
 }
 
+sub assign_child_web {
+    my $self = shift;
+    my $child = shift;
+    $child->{web} = $self;
+    &Scalar::Util::weaken($child->{web});
+}
+
+sub assign_rr {
+    my $self = shift;
+    $self->{rr} = shift;
+    $self->assign_child_web($self->{rr});
+}
+
 sub rr {
     my $self = shift;
     if(@_) {
@@ -123,8 +130,7 @@ sub rr {
 	    if($self->{rr}) { die; }
 	    my $p = shift;
 	    if(!$p->isa('PageGen::Generic')) { die; }
-	    $self->{rr} = $p;
-	    $self->{rr}{web} = $self;
+	    $self->assign_rr($p);
 	}
 	else {
 	    my $class = shift;
@@ -132,87 +138,25 @@ sub rr {
 		if(!$self->{rr}->isa($class)) { die; }
 	    }
 	    elsif(!$class->isa('PageGen::Generic')) { die; }
-	    else {
-		$self->{rr} = $class->new($self);
-		$self->{rr}{web} = $self;
-	    }
+	    else { $self->assign_rr($class->new($self->{r})); }
 	}
     }
     elsif(!$self->{rr}) {
 	require PageGen::HTML;
-	$self->{rr} = PageGen::HTML->new($self);
-	$self->{rr}{web} = $self;
+	$self->assign_rr(PageGen::HTML->new($self->{r}));
     }
     return $self->{rr};
 }
 
-sub headers_out_add {
-    my $r = shift;
-    die if $r->{header_sent};
-    if(@_ % 2) { die; }
-    push @{$r->{headers_out}}, @_;
-}
-
-sub headers_out_set {
-    my $r = shift;
-    die if $r->{header_sent};
-    if(@_ % 2) { die; }
-    for(my $i = 0; $i < @_; ) {
-	my $k = $_[$i++];
-	my $v = $_[$i++];
-	my $changed;
-	if($r->{headers_out}) {
-	    for(my $j = 0; $j < @{$r->{headers_out}}; $j++) {
-		if($k eq $r->{headers_out}->[$j++]) {
-		    $r->{headers_out}->[$j] = $v;
-		    $changed = 1;
-		    last;
-		}
-	    }
-	}
-	if(!$changed) { push @{$r->{headers_out}}, $k, $v; }
-    }
-}
-
-sub no_cache {
-    my $r = shift;
-    my $v = shift; if(!$v) { die; }
-    $r->headers_out_set(Pragma => 'no-cache');
-    $r->headers_out_set('Cache-control' => 'no-cache');
-}
-
-sub send_http_header {
-    my $r = shift;
-    my $content = shift;
-    if($r->{header_sent}) { die; }
-    if(defined $content) { $r->headers_out_set('Content-Type' => $content); }
-    if(!$r->{headers_out}) { dieN 5, "Empty request headers_out"; }
-    $r->{header_sent} = 1;
-    for(my $i = 0; $i < @{$r->{headers_out}}; ) {
-	my $k = $r->{headers_out}->[$i++];
-	my $v = $r->{headers_out}->[$i++];
-	$r->print("$k: $v\n");
-    }
-    $r->print("\n");
-}
-
-sub print {
-    my $r = shift;
-    if(!$r->{header_sent}) { die 'no headers sent before print'; }
-    print @_;
-}
-
-sub printf { my $r = shift; $r->print(sprintf(@_)); }
-
 sub log {
     my $self = shift;
-    print STDERR join("\t", strftime('%x %X', localtime), hvn($>, $self, qw(conf system_user)), "[$$]", $self->real_client_addr,
+    print STDERR join("\t", strftime('%x %X', localtime), hvn($>, \%ENV, 'USER'), "[$$]", $self->real_client_addr,
 		      @_), "\n";
 }
 
 sub log_request {
     my $self = shift;
-    my $env = $self->{r}->GetEnvironment;
+    my $env = $self->env;
     $self->log(n($env->{REQUEST_METHOD}), n($env->{SCRIPT_NAME}), n($env->{PATH_INFO})
 	       #TODO , &n({ @{$self->{r}{post} || []} }->{action})
 	);
@@ -226,26 +170,23 @@ sub log_result {
 	undef $AutoPage::Application::first_request;
 	push @first_request, &seconds(time() - $AutoPage::Application::start_time);
     }
-    $self->log('DONE', hvn('?', $self, 'status'), hvn('-', $self, 'login'), &seconds(time() - $start_mark), @first_request);
+    $self->log('DONE', hvn('?', $self, qw(r status)), hvn('-', $self, 'login'), &seconds(time() - $start_mark), @first_request);
 }
 
 sub real_client_addr {
     my $self = shift;
     # Функция предназначена для исключения инфраструктуры известных прокси. Здесь такого функционала нет, но он может быть добавлен при наследовании.
-    return $self->{r}->GetEnvironment->{REMOTE_ADDR} // 'local';
+    return $self->env->{REMOTE_ADDR} // 'local';
 }
 
 sub delete_memory_recursive_links {
     # Освобождение памяти после обработки запроса в случае необходимости
-    my $self = shift;
-    delete $self->{rr}{web};
-    delete $self->{rr};
+    # my $self = shift;
+    # delete $self->{rr}{web};
+    # delete $self->{rr};
 }
 
-sub env {
-    my $self = shift;
-    return $self->{r}->GetEnvironment;
-}
+sub env { $_[0]{r}{env}; }
 
 sub title { 'Приложение в Паутине' }
 sub app_path { $_[0]->env->{SCRIPT_NAME} }
