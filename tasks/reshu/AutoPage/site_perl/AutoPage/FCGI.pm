@@ -18,7 +18,11 @@ use constant STDOUT_BUF_SIZE => 4096;
 ###############
 # Fields:
 ###############
+# accept
 # accepted
+# terminated
+# changed
+# initialize
 # not_fast_cgi
 # status
 # headers_out
@@ -29,7 +33,6 @@ use constant STDOUT_BUF_SIZE => 4096;
 # post
 # get
 # cookies
-# terminated
 ###############
 
 use constant FCGI_LISTENSOCK_FILENO =>  0;
@@ -85,6 +88,8 @@ sub new {
 	}
 	else {
 	    bless($r, $class);
+	    $r->{listen_sock}->blocking(0);
+	    $r->check_ev;
 	}
 	$Request = $r;
     }
@@ -92,31 +97,74 @@ sub new {
     return $r;
 }
 
-sub accept {
+sub msg {
+    print STDERR join("\t", strftime('%x %X', localtime), hvn($>, \%ENV, 'USER'), "[$$]", @_), "\n";
+}
+
+sub check_ev {
     my $r = shift;
-    if($r->{accepted}) { $r->finish(); }
+    if($EV::VERSION) {
+	msg "EV:$EV::VERSION";
+	$r->{accept} = \&accept_ev;
+	$r->{accept_wh} = &EV::io($r->{listen_sock}, &EV::READ(), sub {
+	    if(CORE::accept($r->{sock}, $r->{listen_sock})) {
+		$r->{accepted} = 1;
+		&EV::unloop();
+	    }
+	    elsif($ERRNO != EAGAIN) {
+		$r->{terminated} = 1;
+		warn "accept() failed: $ERRNO\n";
+		&EV::unloop();
+	    }
+	});
+	#TODO stat $0 and %INC
+    }
+    else {
+	msg "EV not found, using select";
+	$r->{accept} = \&accept_select;
+    }
+}
 
-    if($r->{terminated}) { return; }
+sub accept_ev { &EV::run(); }
 
-    $r->{initialize} = 1;
-
+sub accept_select {
+    my $r = shift;
+    # TODO Реализовать рестарт при изменениях и в этом варианте
     my $sel_bits = '';
     vec($sel_bits, $r->{listen_sock}->fileno(), 1) = 1;
     while(1) {
-	my $res = select($sel_bits, undef, undef, undef);
-	if($res < 0) {
-	    if($ERRNO == EINTR) {
-		if($r->{terminated}) { return; }
+	while(1) {
+	    my $res = select($sel_bits, undef, undef, undef);
+	    if($res < 0) {
+		if($ERRNO == EINTR) {
+		    if($r->{terminated}) { return; }
+		}
+		else { die "select() failed: $ERRNO\n"; }
 	    }
-	    else { die "select() failed: $ERRNO\n"; }
+	    elsif($res > 0) { last; }
 	}
-	elsif($res > 0) { last; }
+	if(CORE::accept($r->{sock}, $r->{listen_sock})) {
+	    $r->{accepted} = 1;
+	    return;
+	}
+	elsif($ERRNO != EAGAIN) {
+	    die "accept() failed: $ERRNO\n";
+	}
     }
+}
 
-    if(!CORE::accept($r->{sock}, $r->{listen_sock})) {
-	die "accept() failed: $ERRNO\n";
+sub accept {
+    my $r = shift;
+    if($r->{accepted}) { $r->finish(); }
+    if($r->{terminated}) { return; }
+    $r->{initialize} = 1;
+    $r->{accept}->($r);
+    if($r->{terminated}) { return; }
+    elsif($r->{changed}) {
+	#TODO check for errors
+	return;
     }
-
+    die eval dw qw($r) unless $r->{accepted};
     my($type, $req_id, $data) = &read_packet($r->{sock});
     if(!defined $type) { last; }
     my($role, $flags) = unpack("nC", $data);
@@ -136,7 +184,6 @@ sub accept {
 
     $r->{stdout_buf} = '';
 
-    $r->{accepted} = 1;
     delete $r->{initialize};
 
     return 1;

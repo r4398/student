@@ -3,6 +3,7 @@
 use strict;
 use warnings;
 use bytes;
+BEGIN { eval 'require EV' }
 use Reshu::Lib qw(site_perl ../AutoPage/site_perl ../../../../dbedit3/lib);
 require AutoPage::Application;
 &AutoPage::Application::run('Student::Blog');
