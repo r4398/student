@@ -12,6 +12,10 @@ our $start_time; BEGIN { $start_time = time; }
 
 sub run {
     my $pkg = shift;
+    if(@ARGV == 1 && $ARGV[0] eq '--test-error-mode') {
+	print "OK\n";
+	return;
+    }
     eval "require $pkg; $pkg\->run;";
     if(my $err = $@) {
 	warn $err;
@@ -28,25 +32,34 @@ sub server_error {
 
 sub to_error_mode {
     msg 'script switched to error mode';
-    if(!$AutoPage::FCGI::Request) {
-	AutoPage::FCGI->new();
-	if($AutoPage::FCGI::Request->accept()) {
-	    $AutoPage::FCGI::Request->{status} = server_error;
+    my $r = $AutoPage::FCGI::Request;
+    if(!$r) {
+	$r = AutoPage::FCGI->new();
+	if($r->accept()) {
+	    $r->{status} = server_error;
 	}
     }
-    elsif($AutoPage::FCGI::Request->{initialize}) {
+    elsif($r->{initialize}) {
 	die "I can't work in error mode over errors in module ".__PACKAGE__."\n";
     }
-    elsif($AutoPage::FCGI::Request->{accepted}) {
-	if($AutoPage::FCGI::Request->{header_sent}) {
-	    $AutoPage::FCGI::Request->print("<P STYLE=\"color:red;font-size:200%\">Server error.</P>");
+    elsif($r->{accepted}) {
+	if($r->{header_sent}) {
+	    $r->print("<P STYLE=\"color:red;font-size:200%\">Server error.</P>");
 	}
 	else {
-	    delete $AutoPage::FCGI::Request->{headers_out};
-	    $AutoPage::FCGI::Request->{status} = server_error;
+	    delete $r->{headers_out};
+	    $r->{status} = server_error;
 	}
     }
-    while($AutoPage::FCGI::Request->accept()) { &call_in_cgi($AutoPage::FCGI::Request); }
+    while(!$r->{terminated}) {
+	$r->accept();
+	while(!$r->{accepted}) {
+	    $r->accept();
+	    return if $r->{terminated};
+	    delete $r->{changed};
+	}
+	&call_in_cgi($r);
+    }
 }
 
 sub join_post {

@@ -105,7 +105,14 @@ sub msg {
 
 sub sleep_before_restart {
     my $r = shift;
-    if((my $run = time() - $AutoPage::Application::start_time) < 20) {
+    return if $r->{terminated};
+    my $cmd = qsh $0;
+    unless("OK\n" eq `$cmd --test-error-mode`) {
+	msg 'test error mode failed';
+	require AutoPage::Application;
+	&AutoPage::Application::to_error_mode();
+    }
+    elsif((my $run = time() - $AutoPage::Application::start_time) < 20) {
 	my $s = 20 - $run;
 	msg "Рестарт слишком рано, подождем $s секунд";
 	sleep($s);
@@ -182,10 +189,8 @@ sub accept {
     $r->{accept}->($r);
     if($r->{terminated}) { return; }
     elsif($r->{changed}) {
-	#TODO check for errors
+	delete $r->{initialize};
 	return;
-	# exec $0;
-	# die "exec '$0' failed: $!";
     }
     die eval dw qw($r) unless $r->{accepted};
     my($type, $req_id, $data) = &read_packet($r->{sock});
