@@ -109,7 +109,10 @@ sub check_ev {
 	msg "EV:$EV::VERSION";
 	$r->{accept} = \&accept_ev;
 	$r->{accept_wh} = &EV::io($r->{listen_sock}, &EV::READ(), sub {
-	    if(CORE::accept($r->{sock}, $r->{listen_sock})) {
+	    if($r->{changed}) {
+		&EV::unloop();
+	    }
+	    elsif(CORE::accept($r->{sock}, $r->{listen_sock})) {
 		$r->{accepted} = 1;
 		&EV::unloop();
 	    }
@@ -172,6 +175,8 @@ sub accept {
     elsif($r->{changed}) {
 	#TODO check for errors
 	return;
+	# exec $0;
+	# die "exec '$0' failed: $!";
     }
     die eval dw qw($r) unless $r->{accepted};
     my($type, $req_id, $data) = &read_packet($r->{sock});
