@@ -7,14 +7,7 @@ use POSIX qw(&strftime);
 require Scalar::Util;
 use Reshu::Utils;
 require AutoPage;
-
-use constant HTTP_OK => 200;
-use constant REDIRECT => 302;
-#use constant REDIRECT => 303;
-use constant BAD_REQUEST => 400;
-use constant FORBIDDEN => 403;
-use constant NOT_FOUND => 404;
-use constant SERVER_ERROR => 500;
+use AutoPage::FCGI;
 
 1;
 
