@@ -3,5 +3,5 @@ package Student::Blog::Page;
 use strict;
 use warnings;
 use bytes;
-use base qw(FCGI::AutoPage);
+use base qw(AutoPage);
 1;

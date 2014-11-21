@@ -1,4 +1,4 @@
-package FCGI::AutoPage::Application::Base;
+package AutoPage::Application::Base;
 # Автор: Юрий Решетников <reshu@mail.ru>
 use strict;
 use warnings;
@@ -6,7 +6,7 @@ use bytes;
 use POSIX qw(&strftime);
 require Scalar::Util;
 use Reshu::Utils;
-require FCGI::AutoPage;
+require AutoPage;
 
 use constant HTTP_OK => 200;
 use constant REDIRECT => 302;
@@ -25,7 +25,7 @@ sub run {
     # 	if(substr($v,0,1) ne '/' || substr($v,0,10) eq '/usr/home/') { $inc{$k} = $v; }
     # }
     # warn eval dw qw($class \@_ \%inc);
-    # warn eval dw qw(\@FCGI::AutoPage::pages \%FCGI::AutoPage::pages);
+    # warn eval dw qw(\@AutoPage::pages \%AutoPage::pages);
     # return;
     my $conf = $class->conf;
     require FCGI;
@@ -74,7 +74,7 @@ sub switch {
     my $self = shift;
     my $uri = $self->{r}->GetEnvironment->{PATH_INFO};
     unless(defined($uri) && $uri ne '') { $uri = '/'; }
-    if(my $rc = FCGI::AutoPage::path_switch($self, $uri)) { return $rc; }
+    if(my $rc = AutoPage::path_switch($self, $uri)) { return $rc; }
     else { return $self->not_found; }
 }
 
@@ -229,9 +229,9 @@ sub log_result {
     my $self = shift;
     my $start_mark = shift;
     my @first_request;
-    if($FCGI::AutoPage::Application::first_request) {
-	undef $FCGI::AutoPage::Application::first_request;
-	push @first_request, &seconds(time() - $FCGI::AutoPage::Application::start_time);
+    if($AutoPage::Application::first_request) {
+	undef $AutoPage::Application::first_request;
+	push @first_request, &seconds(time() - $AutoPage::Application::start_time);
     }
     $self->log('DONE', hvn('?', $self, 'status'), hvn('-', $self, 'login'), &seconds(time() - $start_mark), @first_request);
 }

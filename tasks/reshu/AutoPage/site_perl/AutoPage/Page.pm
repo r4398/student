@@ -1,4 +1,4 @@
-package FCGI::AutoPage::Page;
+package AutoPage::Page;
 # Автор: Юрий Решетников <reshu@mail.ru>
 use strict;
 use warnings;
@@ -16,7 +16,7 @@ sub import {
 sub reg_page_uri {
     my $pkg = shift;
     my $callpkg = shift;
-    if(defined(my $uri = $pkg->page_uri)) { $FCGI::AutoPage::pages{$callpkg}{$uri} = $pkg; }
+    if(defined(my $uri = $pkg->page_uri)) { $AutoPage::pages{$callpkg}{$uri} = $pkg; }
     # В некоторых случаях нам требуется стандартная страница, которая не будет отображаться по стандартным uri,
 }
 

@@ -1,4 +1,4 @@
-package FCGI::AutoPage::Application;
+package AutoPage::Application;
 # Автор: Юрий Решетников <reshu@mail.ru>
 use strict;
 use warnings;

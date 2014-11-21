@@ -1,4 +1,4 @@
-package FCGI::AutoPage;
+package AutoPage;
 # Автор: Юрий Решетников <reshu@mail.ru>
 use strict;
 use warnings;
@@ -28,7 +28,7 @@ sub load_folder {
 	my $dir = IO::Dir->new($p) || die "opendir($p) failed: $!";
 	while(my $f = $dir->read()) { if($f =~ /^(.*)\.pm\z/) {
 	    my $name = $1;
-	    if('1' ne hvn '-', \%EXCLUDE_PAGES, @FCGI::AutoPage::Folder::import_path, $name) {
+	    if('1' ne hvn '-', \%EXCLUDE_PAGES, @AutoPage::Folder::import_path, $name) {
 		&load_page($pkg, $name);
 	    }
 	} }

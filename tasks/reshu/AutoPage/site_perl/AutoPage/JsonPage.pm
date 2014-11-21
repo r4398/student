@@ -1,4 +1,4 @@
-package FCGI::AutoPage::JsonPage;
+package AutoPage::JsonPage;
 # Автор: Юрий Решетников <reshu@mail.ru>
 use strict;
 use warnings;

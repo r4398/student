@@ -4,7 +4,7 @@ use strict;
 use warnings;
 use bytes;
 use Student::Blog::Page ':all';
-use base qw(FCGI::AutoPage::Application::Base);
+use base qw(AutoPage::Application::Base);
 1;
 
 sub title { 'Блог' }

@@ -3,7 +3,7 @@ package Student::Blog::Page::Folder;
 use strict;
 use warnings;
 use bytes;
-use base qw(FCGI::AutoPage::JsonPage);
+use base qw(AutoPage::JsonPage);
 use Reshu::Utils;
 1;
 sub page_uri { 'folder' }

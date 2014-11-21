@@ -4,5 +4,5 @@ use strict;
 use warnings;
 use bytes;
 use Reshu::Lib qw(site_perl ../AutoPage/site_perl ../../../../dbedit3/lib);
-require FCGI::AutoPage::Application;
-&FCGI::AutoPage::Application::run('Student::Blog');
+require AutoPage::Application;
+&AutoPage::Application::run('Student::Blog');

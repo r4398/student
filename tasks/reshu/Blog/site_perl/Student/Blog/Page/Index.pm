@@ -3,7 +3,7 @@ package Student::Blog::Page::Index;
 use strict;
 use warnings;
 use bytes;
-use base qw(FCGI::AutoPage::Page);
+use base qw(AutoPage::Page);
 use Reshu::Utils;
 1;
 sub page_uri { '' }
