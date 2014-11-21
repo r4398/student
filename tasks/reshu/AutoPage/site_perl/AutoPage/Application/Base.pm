@@ -43,6 +43,7 @@ sub run {
 	$self->log_result($start_mark);
 	$self->delete_memory_recursive_links();
     }
+    $request->sleep_before_restart();
 }
 
 sub conf {
@@ -108,6 +109,15 @@ sub not_found {
 	'Указанная страница не найдена',
     );
     return &NOT_FOUND;
+}
+
+sub server_error {
+    my $web = shift;
+    $web->rr->doc(
+	{ title => $web->title },
+	'Ошибка на сервере',
+    );
+    return &SERVER_ERROR;
 }
 
 sub assign_child_web {

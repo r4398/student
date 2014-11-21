@@ -103,6 +103,15 @@ sub msg {
     print STDERR join("\t", strftime('%x %X', localtime), hvn($>, \%ENV, 'USER'), "[$$]", @_), "\n";
 }
 
+sub sleep_before_restart {
+    my $r = shift;
+    if((my $run = time() - $AutoPage::Application::start_time) < 20) {
+	my $s = 20 - $run;
+	msg "Рестарт слишком рано, подождем $s секунд";
+	sleep($s);
+    }
+}
+
 sub check_ev {
     my $r = shift;
     if($EV::VERSION) {
@@ -122,14 +131,14 @@ sub check_ev {
 		&EV::unloop();
 	    }
 	});
-	foreach my $f ($0, values %INC) {
+	foreach my $f ($0, values %INC) { if(defined $f) {
 	    $r->{accept_inc}{$f} = &EV::stat($f, 0, sub {
 		unless($r->{changed}) {
 		    $r->{changed} = 1;
 		    msg 'changed', $f;
 		}
 	    });
-	}
+	} }
     }
     else {
 	msg "EV not found, using select";
