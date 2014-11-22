@@ -90,8 +90,8 @@ sub border_page {
     $web->rr->doc(
 	{
 	    title => do { if(my $pt = $page->page_title) { $db_caption.' | '.$pt; } else { $db_caption; } },
-	    js => [ @DbEdit::Conf::jquery_js ],
-	    css_links => [ @DbEdit::Conf::jquery_css ],
+	    js => [ $page->page_js ],
+	    css_links => [ $page->page_css ],
 	    $page->doc_attrs,
 	},
 	['js', 'window.HrefBase = ', ['jss', $page->script_name], ';' ],

@@ -28,6 +28,15 @@ sub new {
     bless($self, $class);
 }
 
+sub page_js { qw(
+    //ajax.googleapis.com/ajax/libs/jquery/2.1.1/jquery.min.js
+    //ajax.googleapis.com/ajax/libs/jqueryui/1.11.2/jquery-ui.min.js
+)}
+
+sub page_css { qw(
+    //ajax.googleapis.com/ajax/libs/jqueryui/1.11.2/themes/smoothness/jquery-ui.css
+)}
+
 sub page_path { return shift->page_uri; } # Переопределяется автоматически через sub import
 
 sub page_addr {
