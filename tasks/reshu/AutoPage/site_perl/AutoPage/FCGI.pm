@@ -138,7 +138,7 @@ sub check_ev {
 		&EV::unloop();
 	    }
 	});
-	foreach my $f ($0, values %INC, @AutoPage::folders) { if(defined $f) {
+	foreach my $f ($0, values %INC, @AutoPage::folders, @AutoPage::Application::files) { if(defined $f) {
 	    $r->{accept_inc}{$f} = &EV::stat($f, 0, sub {
 		unless($r->{changed}) {
 		    $r->{changed} = 1;

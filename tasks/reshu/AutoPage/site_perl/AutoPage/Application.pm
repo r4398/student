@@ -25,6 +25,29 @@ sub run {
 
 BEGIN { *msg = \&AutoPage::FCGI::msg; }
 
+our @files;
+sub copy_changed_files {
+    my $to = shift;
+    my $from = shift;
+    if(@_) {
+	while(@_) {
+	    my $file = shift;
+	    push @files, $from.'/'.$file;
+	    my($s1,$t1) = (stat $to.'/'.$file)[7,9];
+	    if($s1) {
+		my($s2,$t2) = (stat $from.'/'.$file)[7,9];
+		die unless $s2;
+		next if $s1 == $s2 && $t1 == $t2;
+	    }
+	    system 'cp', '-p', $from.'/'.$file, $to.'/'.$file;
+	    msg 'REPLACED '.$to.'/'.$file;
+	}
+    }
+    else {
+	warn 'All files mode not implemented yet';
+    }
+}
+
 sub server_error {
     require AutoPage::Application::Base;
     return AutoPage::Application::Base->new({}, $AutoPage::FCGI::Request)->server_error;
