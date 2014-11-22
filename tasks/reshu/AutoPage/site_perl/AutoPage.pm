@@ -6,6 +6,7 @@ use bytes;
 use IO::Dir;
 use Reshu::Utils;
 
+our @folders;
 our @pages;
 our %pages;
 our %EXCLUDE_PAGES;
@@ -33,6 +34,7 @@ sub load_folder {
 	    }
 	} }
 	$dir->close() || warn "closedir($p) failed: $!";
+	push @folders, $p;
     }
     else {
 	foreach my $m (@_) { &load_page($pkg, $m); }
