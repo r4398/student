@@ -263,3 +263,9 @@ sub cookie {
 	($expires ? (-expires => $expires) : ()),
     )->as_string());
 }
+
+sub delete_cookie {
+    my $web = shift;
+    my $name = shift;
+    $web->cookie($name, '', 'Thu, 01 Jan 1970 00:00:00 GMT');
+}
