@@ -5,6 +5,7 @@ use warnings;
 use bytes;
 use POSIX qw(&strftime);
 require Scalar::Util;
+require CGI::Cookie;
 use Reshu::Utils;
 require AutoPage;
 use AutoPage::FCGI;
@@ -25,6 +26,7 @@ sub run {
     while($request->accept) {
 	my $start_mark = time;
 	my $self = $class->new($conf, $request);
+	# $self->auth;
 	$self->log_request;
 	my $ret = eval { $self->switch; };
 	if(my $err = $@) {
@@ -61,9 +63,10 @@ sub new {
 sub switch {
     my $self = shift;
     my $uri = $self->env->{PATH_INFO};
-    if(my $rc = $self->check_empty_path($uri)) { return $rc; }
-    if(my $rc = AutoPage::path_switch($self, $uri)) { return $rc; }
-    else { return $self->not_found; }
+    return $self->check_empty_path($uri) ||
+	$self->auth($uri) ||
+	AutoPage::path_switch($self, $uri) ||
+	$self->not_found;
 }
 
 sub check_empty_path_ignore {
@@ -79,6 +82,8 @@ sub check_empty_path {
     unless(defined($uri) && $uri ne '') { return $self->redirect($self->proto_host_port.$self->app_path.'/'); }
     return;
 }
+
+sub auth {}
 
 sub top_menu { ; }
 
@@ -243,4 +248,18 @@ sub proto_host_port {
     return 'http://' . (
 	$env->{HTTP_HOST} || ($env->{SERVER_NAME}.($env->{SERVER_PORT} != 80 ? ':'.$env->{SERVER_PORT} : ''))
     );
+}
+
+sub cookie {
+    my $web = shift;
+    my $name = shift;
+    my $value = shift;
+    my $expires = shift;
+    my $h = $web->{r}->hostname();
+    $web->{r}->headers_out_add('Set-Cookie' => CGI::Cookie->new(
+	-name => $name, -value => $value,
+	($h =~ /\./ ? (-domain => $h) : ()),
+	-path => $web->{r}{env}{SCRIPT_NAME},
+	($expires ? (-expires => $expires) : ()),
+    )->as_string());
 }
