@@ -194,6 +194,7 @@ sub accept {
 	return;
     }
     die eval dw qw($r) unless $r->{accepted};
+    $r->{sock}->blocking(1);
     my($type, $req_id, $data) = &read_packet($r->{sock});
     if(!defined $type) { last; }
     my($role, $flags) = unpack("nC", $data);
