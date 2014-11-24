@@ -74,6 +74,7 @@ sub to_error_mode {
 	    $r->{status} = server_error;
 	}
     }
+    return unless $r->is_fast;
     while(!$r->{terminated}) {
 	$r->accept();
 	while(!$r->{accepted}) {

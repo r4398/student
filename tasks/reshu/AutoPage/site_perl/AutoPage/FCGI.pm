@@ -25,7 +25,6 @@ use constant STDOUT_BUF_SIZE => 4096;
 # terminated
 # changed
 # initialize
-# not_fast_cgi
 # status
 # headers_out
 # header_sent
@@ -98,6 +97,8 @@ sub new {
     if(!$ENV{USER}) { $ENV{USER} = getpwuid($UID); }
     return $r;
 }
+
+sub is_fast { 1 }
 
 sub msg {
     print STDERR join("\t", strftime('%x %X', localtime), hvn($>, \%ENV, 'USER'), "[$$]", @_), "\n";
@@ -515,6 +516,8 @@ use IO::Handle;
 use Reshu::Utils;
 
 1;
+
+sub is_fast { 0 }
 
 sub accept {
     my $r = shift;
