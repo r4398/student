@@ -160,6 +160,15 @@ sub server_error {
     return &SERVER_ERROR;
 }
 
+sub bad_request {
+    my $web = shift;
+    $web->rr->doc(
+	{ title => $web->title },
+	'Неправильный запрос',
+    );
+    return &BAD_REQUEST;
+}
+
 sub assign_child_web {
     my $self = shift;
     my $child = shift;
