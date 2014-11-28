@@ -73,6 +73,8 @@ use constant FORBIDDEN => 403;
 use constant NOT_FOUND => 404;
 use constant SERVER_ERROR => 500;
 
+sub debug_hkeys { qw(accept_inc) }
+
 sub new {
     my $class = shift;
     my $not_single = shift; # Он же not_fast

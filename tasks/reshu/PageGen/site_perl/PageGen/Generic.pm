@@ -65,10 +65,6 @@ sub str {
     return $self->{out}->{buf};
 }
 
-#+++ !!! ++++++++++++++++++++++++++++++++++++++++++++ !!! +++
-#+++ !!! +++ Неадекватно работают вложенные delay +++ !!! +++
-#+++ !!! ++++++++++++++++++++++++++++++++++++++++++++ !!! +++
-
 sub delay_push {
     my $self = shift;
     push @{$self->{delay}}, $self->{out};
@@ -86,15 +82,14 @@ sub delay_pop {
 
 sub delay_print {
     my $self = shift;
+    #+++ my $count = @_ ? shift : 1; # Сомнение вызывает тот момент, что мы уже могли частично извлечь стек.... На самом деле тот же эффект можно достичь несколькими последовательными вызовами delay_print
     return if !$self->{delay};
-    push @{$self->{delay}}, $self->{out};
-    $self->{out} = shift @{$self->{delay}};
-    foreach my $d (@{$self->{delay}}) {
-	die if ref($d) ne 'PageGen::Generic::DelayHandler' && ref($d) ne 'PageGen::Generic::DelayHandlerPrintNext';
-	$self->{out}->print(@{$d->{buf}});
-	delete $d->{buf};
-    }
-    delete $self->{delay};
+    my $d = $self->{out};
+    $self->{out} = pop @{$self->{delay}};
+    delete $self->{delay} unless @{$self->{delay}};
+    die eval dw qw($d) if ref($d) ne 'PageGen::Generic::DelayHandler' && ref($d) ne 'PageGen::Generic::DelayHandlerPrintNext';
+    $self->{out}->print(@{$d->{buf}});
+    delete $d->{buf};
 }
 
 sub delay_print_next {
