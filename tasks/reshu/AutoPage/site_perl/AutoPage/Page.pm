@@ -79,6 +79,18 @@ sub print_page {
     else { return $self->full_page(); } #+++ Здесь можно добавить eval и вывод ошибки, но тогда надо сюда же добавлять откат баз данных
 }
 
+sub post_action {
+    my $page = shift;
+    if($page->has_post) {
+	unless(my $a = $page->post->{action}) { return $page->bad_args; }
+	elsif(my $c = $page->can('pa_'.$a)) {
+	    if(my $rc = $c->($page)) { return $rc; } else { warn eval dw qw($rc $page :web); return HTTP_OK; }
+	}
+	else { return $page->bad_args; }
+    }
+    else { return; }
+}
+
 sub full_page {
     my $self = shift;
     $self->border_page(sub { $self->content_page });

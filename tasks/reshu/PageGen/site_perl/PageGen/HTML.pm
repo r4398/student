@@ -315,7 +315,7 @@ sub tag_without_text {
 
 BEGIN {
     foreach my $tag (qw(p div h1 h2 h3 h4 pre li option)) { eval "sub $tag { &tag_with_text('$tag', 'nl', \@_); }"; }
-    foreach my $tag (qw(span strong a kbd label textarea b i u sub sup)) { eval "sub $tag { &tag_with_text('$tag', 0, \@_); }"; }
+    foreach my $tag (qw(span strong a kbd label textarea b i u sub sup button)) { eval "sub $tag { &tag_with_text('$tag', 0, \@_); }"; }
     foreach my $tag (qw(input img)) { eval "sub $tag { &tag_without_text('$tag', \@_); }"; }
     foreach my $tag (qw(ol ul)) { eval "sub $tag { &tag_with_childs('$tag', 'nl', \\&li, \@_); }"; }
     foreach my $tag (qw(select)) { eval "sub $tag { &tag_with_childs('$tag', 'nl', \\&option, \@_); }"; }
