@@ -8,6 +8,7 @@ use Exporter 'import';
 use IO::Handle;
 use POSIX 'strftime', 'errno_h';
 use Reshu::Utils;
+use PageGen::Utils qw(unescape_uri HTTP_OK);
 
 our @EXPORT;
 
@@ -63,15 +64,6 @@ use constant FCGI_UNKNOWN_ROLE      =>  3;
 use constant FCGI_MAX_CONNS  => "FCGI_MAX_CONNS";
 use constant FCGI_MAX_REQS   => "FCGI_MAX_REQS";
 use constant FCGI_MPXS_CONNS => "FCGI_MPXS_CONNS";
-
-push @EXPORT, qw(&HTTP_OK &REDIRECT &BAD_REQUEST &NOT_FOUND &FORBIDDEN &SERVER_ERROR);
-use constant HTTP_OK => 200;
-use constant REDIRECT => 302;
-#use constant REDIRECT => 303;
-use constant BAD_REQUEST => 400;
-use constant FORBIDDEN => 403;
-use constant NOT_FOUND => 404;
-use constant SERVER_ERROR => 500;
 
 sub debug_hkeys { qw(accept_inc) }
 
@@ -479,37 +471,6 @@ sub hostname {
 	: $r->{env}->{SERVER_NAME};
 }
 
-my @escape_html_chars;
-$escape_html_chars[ord '<'] = '&lt;';
-$escape_html_chars[ord '>'] = '&gt;';
-$escape_html_chars[ord '&'] = '&amp;';
-$escape_html_chars[ord '"'] = '&quot;';
-
-push @EXPORT, '&escape_html';
-sub escape_html {
-    my $s = shift;
-    $s =~ s/[<>&\"]/$escape_html_chars[ord $MATCH]/ge;
-    return $s;
-}
-
-push @EXPORT, '&escape_uri';
-sub escape_uri {
-    my $s = shift;
-    $s =~ s/[+?\"\'<>]/sprintf('%%%02X', ord $MATCH)/ge;
-    $s =~ s/ /+/g;
-    return $s;
-}
-
-push @EXPORT, '&unescape_uri';
-sub unescape_uri {
-    my $s = shift;
-    if(defined $s) {
-	$s =~ s/\+/ /g;
-	$s =~ s/%([0-9A-Fa-f]{2})/chr(hex($1))/ge;
-    }
-    return $s;
-}
-
 package AutoPage::FCGI::NotFast;
 use strict;
 use warnings;
@@ -517,6 +478,7 @@ use bytes;
 use English;
 use IO::Handle;
 use Reshu::Utils;
+use PageGen::Utils qw(unescape_uri);
 
 1;
 
@@ -571,7 +533,7 @@ sub read_stdin_post {
 	if($data_pice ne '') { $data = pop @d; }
 	foreach my $p (@d) {
 	    my @p = split(/=/, $p, 2);
-	    push @$post, map &AutoPage::FCGI::unescape_uri($_), @p;
+	    push @$post, map &unescape_uri($_), @p;
 	    if(@p == 1) { push @$post, undef; }
 	}
 	if($data_pice eq '') { last; }

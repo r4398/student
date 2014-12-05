@@ -7,8 +7,8 @@ use POSIX qw(&strftime);
 require Scalar::Util;
 require CGI::Cookie;
 use Reshu::Utils;
+use PageGen::Utils;
 require AutoPage;
-use AutoPage::FCGI;
 
 1;
 

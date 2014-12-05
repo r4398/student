@@ -2,9 +2,8 @@ package PageGen::HTML;
 
 use strict;
 use English;
-use PageGen::Utils qw(&escape_v);
+use PageGen::Utils qw(&escape_v &escape_html :HTTP_STATUS);
 use Reshu::Utils qw(&n &hv &d &dw);
-use DbEdit::Request;
 use base qw(PageGen::Generic);
 
 use constant USER_URI => 1;
@@ -1029,7 +1028,7 @@ sub json {
 }
 
 package PageGen::HTML::JsExp;
-use DbEdit::PkgDefaults;
+use strict; use warnings;
 1;
 
 sub new {
@@ -1110,7 +1109,7 @@ sub print_script {
 }
 
 package PageGen::HTML::JsCode;
-use DbEdit::PkgDefaults;
+use strict; use warnings;
 1;
 
 sub new {
