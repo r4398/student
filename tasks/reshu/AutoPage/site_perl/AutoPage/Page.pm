@@ -84,7 +84,7 @@ sub post_action {
     if($page->has_post) {
 	unless(my $a = $page->post->{action}) { return $page->bad_args; }
 	elsif(my $c = $page->can('pa_'.$a)) {
-	    if(my $rc = $c->($page)) { return $rc; } else { warn eval dw qw($rc $page :web); return HTTP_OK; }
+	    if(my $rc = $c->($page)) { return $rc; } else { warn eval dw qw($rc $page :web); return $page->{web}->HTTP_OK; }
 	}
 	else { return $page->bad_args; }
     }
