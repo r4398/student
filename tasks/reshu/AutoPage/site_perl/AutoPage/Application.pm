@@ -6,6 +6,7 @@ use bytes;
 use English;
 use Reshu::Utils;
 require AutoPage::FCGI;
+require PageGen::Utils;
 
 our $first_request = 1;
 our $start_time; BEGIN { $start_time = time; }
@@ -36,7 +37,7 @@ sub copy_changed_files {
 	    my($s1,$t1) = (stat $to.'/'.$file)[7,9];
 	    if($s1) {
 		my($s2,$t2) = (stat $from.'/'.$file)[7,9];
-		die unless $s2;
+		die eval dw qw($from $file) unless $s2;
 		next if $s1 == $s2 && $t1 == $t2;
 	    }
 	    system 'cp', '-p', $from.'/'.$file, $to.'/'.$file;
@@ -116,7 +117,7 @@ sub call_in_cgi {
     die if $r->{header_sent};
     $r->{header_sent} = 1;
     $r->print($out);
-    return if $r->{status} == &AutoPage::FCGI::SERVER_ERROR;
+    return if $r->{status} == &PageGen::Utils::SERVER_ERROR;
     $r->finish();
     $r->sleep_before_restart();
     msg "restarting";

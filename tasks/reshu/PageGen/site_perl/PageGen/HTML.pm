@@ -114,7 +114,7 @@ sub doc {
     my $caption = &n($attr->{caption}, $self->{page_caption});
     my $title = &n($attr->{title}, $self->{page_title}, $caption);
     $self->{out}->send_http_header('text/html; charset='.$attr->{charset});
-    $self->{out}->print("<html>\n<head>\n",
+    $self->{out}->print("<!doctype html>\n<html>\n<head>\n",
 	'<meta http-equiv="Content-Type" content="text/html; charset=', $attr->{charset}, "\" />\n",
 	(defined($title) ? ('<title>', &escape_html($title), "</title>\n") : ()),
 	($attr->{js} ? (map "<SCRIPT LANGUAGE=JavaScript SRC=\"$_\"></SCRIPT>\n",
