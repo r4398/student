@@ -66,11 +66,6 @@ sub accept {
 	    };
 	    $read_packet->(sub {
 		my($type, $req_id, $data) = @_;
-		if(!defined $type) {
-		    $hdl->destroy;
-		    undef $hdl;
-		    return;
-		}
 		my($role, $flags) = unpack("nC", $data);
 		return $error->('*') if $type != &AutoPage::FCGI::FCGI_BEGIN_REQUEST;
 		return $error->('*') if $role != &AutoPage::FCGI::FCGI_RESPONDER;
@@ -94,15 +89,51 @@ sub run {
     my $class = shift;
     my $r = bless { stdout_buf => '' }, ref($class) || $class;
     $r->{id} = shift;
-    my($read_packet, $error, $session) = @_;
+    $r->read_params(@_);
 
-    $r->{env} = &read_params($r->{sock}, $req_id);
-    if(($r->{env}->{REQUEST_METHOD} || '') eq 'POST') {
-	$r->{post} = &read_stdin_post($r->{sock}, $req_id);
-    }
-    else { &read_stdin_ignore($r->{sock}, $req_id); }
+    # $r->{env} = &read_params($r->{sock}, $req_id);
+    # if(($r->{env}->{REQUEST_METHOD} || '') eq 'POST') {
+    # 	$r->{post} = &read_stdin_post($r->{sock}, $req_id);
+    # }
+    # else { &read_stdin_ignore($r->{sock}, $req_id); }
 
-    $r->read_cookies();
-    $r->read_get();
+    # $r->read_cookies();
+    # $r->read_get();
     return;
+}
+
+sub read_params {
+    my $r = shift;
+    my($read_packet, $error, $session) = @_;
+    my $data;
+    my $wait_size = 0;
+    my $read_params_pice = sub {
+	$read_packet->(sub {
+	    my($type, $req_id, $data_pice) = @_;
+	# if($type != FCGI_PARAMS) { die; }
+	# if($id != $req_id) { die; }
+	# if($data_pice eq '') { if($data ne '') { die; } last; }
+	# $data .= $data_pice;
+	# if(length($data) < $wait_size) { next; }
+	# $wait_size = 0;
+	# my $offset = 0;
+	# while($offset < length($data)) {
+	#     my($ni, $name_len) = &get_nv_len($data, $offset);
+	#     if(!$ni) { $wait_size = 4; last; }
+	#     my($vi, $value_len) = &get_nv_len($data, $offset + $ni);
+	#     if(!$vi) { $wait_size = $ni + 1 + $name_len; last; }
+	#     if(length($data) < $offset + $ni + $vi + $name_len + $value_len) {
+	# 	$wait_size = $ni + $vi + $name_len + $value_len;
+	# 	last;
+	#     }
+	#     $offset += $ni + $vi;
+	#     my $name = substr($data, $offset, $name_len);
+	#     $offset += $name_len;
+	#     $env->{$name} = substr($data, $offset, $value_len);
+	#     $offset += $value_len;
+	# }
+	# $data = substr($data, $offset);
+	});
+    };
+    $read_params_pice->();
 }
