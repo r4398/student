@@ -190,7 +190,7 @@ sub accept {
     die eval dw qw($r) unless $r->{accepted};
     $r->{sock}->blocking(1);
     my($type, $req_id, $data) = &read_packet($r->{sock});
-    if(!defined $type) { last; }
+    if(!defined $type) { return; }
     my($role, $flags) = unpack("nC", $data);
     if($type != FCGI_BEGIN_REQUEST) { die; }
     if($role != FCGI_RESPONDER) { die; }
