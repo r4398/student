@@ -103,7 +103,7 @@ sub read_params {
 	    my($type, $req_id, $data_pice) = @_;
 	    return $error->('*') if $type != &AutoPage::FCGI::FCGI_PARAMS;
 	    return $error->('*') if $req_id != $r->{id};
-	    if($data_pice eq '') { if($data ne '') { $error->('*'); } else { $r->read_stdin($read_packet, $error, $session); } }
+	    if($data_pice eq '') { if($data ne '') { $error->('*'); } else { $r->read_stdin($read_packet, $error, $session); } return; }
 	    $data .= $data_pice;
 	    if(length($data) >= $wait_size) {
 		$wait_size = 0;
@@ -134,12 +134,42 @@ sub read_params {
 sub read_stdin {
     my $r = shift;
     my($read_packet, $error, $session) = @_;
+    my $parse;
+    if(($r->{env}->{REQUEST_METHOD} || '') eq 'POST') {
+	my $data = '';
+	$parse = sub {
+	    my $data_pice = shift;
+	    $data .= $data_pice;
+	    my @d = split /&/, $data;
+	    if($data_pice ne '') { $data = pop @d; }
+	    foreach my $p (@d) {
+		my @p = split(/=/, $p, 2);
+		push @{$r->{post}}, map &unescape_uri($_), @p;
+		if(@p == 1) { push @$post, undef; }
+	    }
+	};
+    }
+    else { $parse = sub {}; }
+    my $read = sub {
+	$read_packet->(sub {
+	    my($type, $req_id, $data_pice) = @_;
+	    return $error->('*') if $type != &AutoPage::FCGI::FCGI_STDIN;
+	    return $error->('*') if $req_id != $r->{id};
+	    $parse->($data_pice);
+	    if($data_pice eq '') { $r->session($read_packet, $error, $session); } else { $read->(); }
+	});
+    };
+    $read->();
+}
 
-    # if(($r->{env}->{REQUEST_METHOD} || '') eq 'POST') {
-    # 	$r->{post} = &read_stdin_post($r->{sock}, $req_id);
-    # }
-    # else { &read_stdin_ignore($r->{sock}, $req_id); }
+sub session {
+    my $r = shift;
+    my($read_packet, $error, $session) = @_;
+    $r->read_cookies();
+    $r->read_get();
+    $session->($r);
+}
 
-    # $r->read_cookies();
-    # $r->read_get();
+sub print {
+    #+++TODO
 }
