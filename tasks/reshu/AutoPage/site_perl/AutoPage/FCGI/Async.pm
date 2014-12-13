@@ -18,24 +18,27 @@ sub accept {
 	while(my $peer = accept my $fh, $self->{sock}) {
 	    my($service, $host) = unpack_sockaddr $peer;
 	    my $reading;
-	    my $hdl; $hdl = AnyEvent::Handle
+	    $r->{sock_aw} = AnyEvent::Handle
 		fh => $fh,
 		on_error => sub {
-		    my($_hdl, $fatal, $msg) = @_;
+		    my($hdl, $fatal, $msg) = @_;
 		    $fail->($msg);
 		    $hdl->destroy;
-		    undef $hdl;
+		    delete $r->{sock_aw};
 		},
 		on_eof => sub {
+		    my($hdl) = @_;
 		    if($reading || $hdl->{rbuf} ne '') { $fail->('Unexpected end of stream'); }
 		    $hdl->destroy;
-		    undef $hdl;
+		    delete $r->{sock_aw};
 		};
 	    my $error = sub {
 		my $msg = shift;
 		$fail->($msg);
-		$hdl->destroy;
-		undef $hdl;
+		if($r->{sock_aw}) {
+		    $r->{sock_aw}->destroy;
+		    delete $r->{sock_aw};
+		}
 		return;
 	    };
 	    my $read = sub {
@@ -43,7 +46,7 @@ sub accept {
 		my $cb = shift;
 		return $error->('Algorithm error') if $reading;
 		$reading = 1;
-		$hdl->push_read(chunk => $size, sub {
+		$r->{sock_aw}->push_read(chunk => $size, sub {
 		    my $data = $_[1];
 		    $reading = 0;
 		    $cb->($data);
@@ -167,9 +170,26 @@ sub session {
     my($read_packet, $error, $session) = @_;
     $r->read_cookies();
     $r->read_get();
+    $r->{accepted} = 1;
     $session->($r);
 }
 
-sub print {
-    #+++TODO
+sub write_packet {
+    my $r = shift;
+    my $type = shift;
+    my $req_id = shift;
+    my $data = shift;
+    my $padding = (8 - length($data) % 8) % 8;
+    my $header = pack('CCnnCC', FCGI_VERSION_1, $type, $req_id, length($data), $padding, 0);
+    $r->{sock_aw}->push_write($header . $data . ($padding ? ("\0" x $padding) : ''));
+}
+
+sub close_socket {
+    my $r = shift;
+    $r->{sock_aw}->push_shutdown;
+}
+
+sub DESTROY {
+    my $r = shift;
+    $r->finish if $r->{accepted};
 }

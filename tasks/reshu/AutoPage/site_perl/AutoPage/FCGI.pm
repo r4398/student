@@ -216,7 +216,7 @@ sub accept {
 sub flush {
     my $r = shift;
     if($r->{stdout_buf} ne '') {
-	&write_packet($r->{sock}, FCGI_STDOUT, $r->{id}, $r->{stdout_buf});
+	$r->write_packet(FCGI_STDOUT, $r->{id}, $r->{stdout_buf});
 	$r->{stdout_buf} = '';
     }
 }
@@ -229,13 +229,18 @@ sub finish {
 	else { dieN 5, "Empty output page"; }
     }
     $r->flush();
-    &write_packet($r->{sock}, FCGI_STDOUT, $r->{id}, '');
+    $r->write_packet(FCGI_STDOUT, $r->{id}, '');
     if(!defined $r->{status}) { $r->{status} = HTTP_OK; }
-    &write_packet($r->{sock}, FCGI_END_REQUEST, $r->{id},
+    $r->write_packet(FCGI_END_REQUEST, $r->{id},
 	pack('NC', $r->{status}, FCGI_REQUEST_COMPLETE)."\0\0\0");
-    $r->{sock}->close() || warn $ERRNO;
+    $r->close_socket;
     delete @{$r}{qw(sock accepted id env post get cookies status
 	headers_out header_sent stdout_buf)};
+}
+
+sub close_socket {
+    my $r = shift;
+    $r->{sock}->close() || warn $ERRNO;
 }
 
 sub terminate {
@@ -277,10 +282,9 @@ sub print {
 	else {
 	    my $n = STDOUT_BUF_SIZE - length($r->{stdout_buf});
 	    $r->{stdout_buf} .= substr($s, 0, $n);
-	    &write_packet($r->{sock}, FCGI_STDOUT, $r->{id}, $r->{stdout_buf});
+	    $r->write_packet(FCGI_STDOUT, $r->{id}, $r->{stdout_buf});
 	    while(length($s) - $n >= STDOUT_BUF_SIZE) {
-		&write_packet($r->{sock}, FCGI_STDOUT, $r->{id},
-			substr($s, $n, STDOUT_BUF_SIZE));
+		$r->write_packet(FCGI_STDOUT, $r->{id}, substr($s, $n, STDOUT_BUF_SIZE));
 		$n += STDOUT_BUF_SIZE;
 	    }
 	    $r->{stdout_buf} = substr($s, $n);
@@ -311,14 +315,14 @@ sub read_packet {
 }
 
 sub write_packet {
-    my $sock = shift;
+    my $r = shift;
     my $type = shift;
     my $req_id = shift;
     my $data = shift;
     my $padding = (8 - length($data) % 8) % 8;
     my $header = pack('CCnnCC', FCGI_VERSION_1, $type, $req_id,
 	length($data), $padding, 0);
-    $sock->printflush($header, $data, $padding ? ("\0" x $padding) : ());
+    $r->{sock}->printflush($header, $data, $padding ? ("\0" x $padding) : ());
 }
 
 sub get_nv_len {
