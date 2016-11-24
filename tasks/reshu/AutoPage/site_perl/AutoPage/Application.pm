@@ -30,6 +30,12 @@ our @files;
 sub copy_changed_files {
     my $to = shift;
     my $from = shift;
+    unless(-d $to) {
+	unless(mkdir $to) {
+	    msg 'ERROR', "mkdir($to) failed: $ERRNO";
+	    return;
+	}
+    }
     if(@_) {
 	while(@_) {
 	    my $file = shift;
