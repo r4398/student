@@ -155,7 +155,7 @@ sub css {
     return unless %$css;
     $self->{out}->print("<style type=\"text/css\"><!--\n");
     if($css->{defaults}) {
-	$self->{out}->print("table { border-collapse: collapse; }\n");
+	$self->{out}->print("table { border-collapse: collapse; }\nlabel { white-space: nowrap; }\n");
 	delete $css->{defaults};
     }
     if($css->{media_print}) {
